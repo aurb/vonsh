@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Vonsh
+Comment=SDL-based snake-like game
+Exec=vonsh
+Icon=vonsh
+Categories=Game;ArcadeGame;
+Keywords=game;arcade;snake;
+Terminal=false

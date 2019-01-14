@@ -1,0 +1,5 @@
+vonsh (1.0) unstable; urgency=medium
+
+  * Initial packaging. Closes: #935761
+
+ -- Andrzej Urbaniak <au742582@interia.pl>  Mon, 26 Aug 2019 13:29:08 +0200
