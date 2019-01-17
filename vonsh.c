@@ -125,15 +125,15 @@ int main(int argc, char ** argv)
     IMG_Init(IMG_INIT_PNG);
     screen = SDL_CreateWindow("Snake game", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCR_W, SCR_H, 0);
     renderer = SDL_CreateRenderer(screen, -1, 0);
-    srf_ground = IMG_Load("tile_ground.png");
+    srf_ground = IMG_Load("resources/tile_ground.png");
     txt_ground = SDL_CreateTextureFromSurface(renderer, srf_ground);
-    srf_snake_body = IMG_Load("tile_snake_body.png");
+    srf_snake_body = IMG_Load("resources/tile_snake_body.png");
     txt_snake_body = SDL_CreateTextureFromSurface(renderer, srf_snake_body);
-    srf_snake_head = IMG_Load("tile_snake_head.png");
+    srf_snake_head = IMG_Load("resources/tile_snake_head.png");
     txt_snake_head = SDL_CreateTextureFromSurface(renderer, srf_snake_head);
-    srf_food = IMG_Load("tile_food.png");
+    srf_food = IMG_Load("resources/tile_food.png");
     txt_food = SDL_CreateTextureFromSurface(renderer, srf_food);
-    srf_wall = IMG_Load("tile_wall.png");
+    srf_wall = IMG_Load("resources/tile_wall.png");
     txt_wall = SDL_CreateTextureFromSurface(renderer, srf_wall);
 
     /* initialize movement direction and position */
