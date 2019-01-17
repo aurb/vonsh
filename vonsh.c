@@ -4,6 +4,7 @@
 #define SCR_W 1024
 #define SCR_H 768
 #define TILE_SIZE 16
+#define GAME_SPEED 200
 
 SDL_Window *screen = NULL;
 SDL_Renderer *renderer = NULL;
@@ -41,32 +42,18 @@ typedef struct BoardField {
 } BoardField;
 BoardField *game_board = NULL;
 
-void seed_food_and_walls(void)
+void seed_item(FieldType item_type)
 {
     int x = 0, y = 0; /* coordinates */
-    int i = score; /* counter of walls to seed */
     while(1)
     {
         x = rand() % game_board_w;
         y = rand() % game_board_h;
         if (game_board[game_board_w*y+x].type == Empty)
         {
-            game_board[game_board_w*y+x].type = Food;
+            game_board[game_board_w*y+x].type = item_type;
             break;
         }
-    }
-    while(i)
-    {
-        while(1) {
-            x = rand() % game_board_w;
-            y = rand() % game_board_h;
-            if (game_board[game_board_w*y+x].type == Empty)
-            {
-                game_board[game_board_w*y+x].type = Wall;
-                break;
-            }
-        }
-        i--;
     }
 }
 
@@ -115,12 +102,15 @@ int main(int argc, char ** argv)
     int quit = 0;
     SDL_Event event;
 
+    /* allocate and initialize game board */
     game_board = calloc(game_board_w*game_board_h, sizeof(BoardField));
     for (int i=0; i<game_board_w*game_board_h; i++) {
         game_board[i].type = Empty;
         game_board[i].dx = 0;
         game_board[i].dy = 0;
     }
+
+    /* init SDL library and load game resources */
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER);
     IMG_Init(IMG_INIT_PNG);
     screen = SDL_CreateWindow("Snake game", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCR_W, SCR_H, 0);
@@ -141,11 +131,11 @@ int main(int argc, char ** argv)
     dhx = 0;   dhy = -1;
     hx = tx = SCR_W/(TILE_SIZE*2);   hy = ty = SCR_H/(TILE_SIZE*2);
     game_board[game_board_w*hy+hx].type = Snake;
-    seed_food_and_walls();
+    seed_item(Food);
     render_screen();
 
     /* init timer and trigger rendering of first frame */
-    game_timer = SDL_AddTimer(250, tick_callback, 0);
+    game_timer = SDL_AddTimer(GAME_SPEED, tick_callback, 0);
 
     while (!quit)
     {
@@ -163,7 +153,7 @@ int main(int argc, char ** argv)
                 else if (game_board[game_board_w*(hy+dhy)+hx+dhx].type == Food) {
                     score++;
                     expand_counter += score;
-                    seed_food_and_walls();
+                    seed_item(Food);
                 }
                 else if (game_board[game_board_w*(hy+dhy)+hx+dhx].type != Empty) {
                     /* collision with snake body or wall */
@@ -185,6 +175,7 @@ int main(int argc, char ** argv)
                     game_board[board_offset].dy = 0;
                 }
                 else {
+                    seed_item(Wall);
                     expand_counter--;
                 }
 
