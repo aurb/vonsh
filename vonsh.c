@@ -5,30 +5,32 @@
 #define SCR_H 768
 #define TILE_SIZE 16
 #define GAME_SPEED 200
-
+#define GROUND_TILES 8
+#define WALL_TILES 12
 SDL_Window *screen = NULL;
 SDL_Renderer *renderer = NULL;
-SDL_Surface *srf_ground = NULL;
-SDL_Texture *txt_ground = NULL;
+SDL_Texture *txt_game_board = NULL;
+SDL_Surface *srf_env_tileset = NULL;
+SDL_Texture *txt_env_tileset = NULL;
 SDL_Surface *srf_snake_body = NULL;
 SDL_Texture *txt_snake_body = NULL;
 SDL_Surface *srf_snake_head = NULL;
 SDL_Texture *txt_snake_head = NULL;
 SDL_Surface *srf_food = NULL;
 SDL_Texture *txt_food = NULL;
-SDL_Surface *srf_wall = NULL;
-SDL_Texture *txt_wall = NULL;
 SDL_TimerID game_timer = 0;
 
-const int game_board_w = SCR_W/TILE_SIZE, game_board_h = SCR_H/TILE_SIZE;
-int dhx=0, dhy=0; /* head movement direction */
-int hx=0, hy=0; /* head coordinates */
-int tx=0, ty=0; /* tail coordinates */
-int score=0;
-int expand_counter=0;
-int board_offset=0;
+SDL_Rect ground_tile[GROUND_TILES];
+SDL_Rect wall_tile[WALL_TILES];
 
-typedef enum e_FieldType { /* indicates what is on game board field */
+const int game_board_w = SCR_W/TILE_SIZE, game_board_h = SCR_H/TILE_SIZE;
+int dhx=0, dhy=0;     /* head movement direction */
+int hx=0, hy=0;       /* head coordinates */
+int tx=0, ty=0;       /* tail coordinates */
+int score=0;          /* player's score, number of food eaten */
+int expand_counter=0; /* counter of snake segments to add and walls to seed */
+
+typedef enum e_FieldType { /* indicates what is inside game board field */
     Empty,
     Snake,
     Food,
@@ -37,10 +39,65 @@ typedef enum e_FieldType { /* indicates what is on game board field */
 
 typedef struct BoardField {
     FieldType type; /* type of this field */
+    int p; /* item paremeter(kind of food, kind of wall, etc.) */
     int dx; /* delta x to next piece of snake. 0 if head */
     int dy; /* delta y to next piece of snake. 0 if head */
 } BoardField;
 BoardField *game_board = NULL;
+
+void init_tiles(void)
+{
+    ground_tile[0].x = 0;   ground_tile[0].y = 0;
+    ground_tile[1].x = 1;   ground_tile[1].y = 0;
+    ground_tile[2].x = 2;   ground_tile[2].y = 0;
+    ground_tile[3].x = 3;   ground_tile[3].y = 0;
+    ground_tile[4].x = 4;   ground_tile[4].y = 0;
+    ground_tile[5].x = 0;   ground_tile[5].y = 1;
+    ground_tile[6].x = 0;   ground_tile[6].y = 2;
+    ground_tile[7].x = 0;   ground_tile[7].y = 3;
+
+    for (int i=0; i<GROUND_TILES; i++) {
+        ground_tile[i].x *= TILE_SIZE;   ground_tile[i].y *= TILE_SIZE;
+        ground_tile[i].w = ground_tile[i].h = TILE_SIZE;
+    }
+
+    wall_tile[0].x = 0;   wall_tile[0].y = 16;
+    wall_tile[1].x = 1;   wall_tile[1].y = 16;
+    wall_tile[2].x = 2;   wall_tile[2].y = 16;
+    wall_tile[3].x = 3;   wall_tile[3].y = 16;
+    wall_tile[4].x = 0;   wall_tile[4].y = 17;
+    wall_tile[5].x = 1;   wall_tile[5].y = 17;
+    wall_tile[6].x = 2;   wall_tile[6].y = 17;
+    wall_tile[7].x = 3;   wall_tile[7].y = 17;
+    wall_tile[8].x = 0;   wall_tile[8].y = 18;
+    wall_tile[9].x = 1;   wall_tile[9].y = 18;
+    wall_tile[10].x = 2;  wall_tile[10].y = 18;
+    wall_tile[11].x = 3;  wall_tile[11].y = 18;
+
+    for (int i=0; i<WALL_TILES; i++) {
+        wall_tile[i].x *= TILE_SIZE;   wall_tile[i].y *= TILE_SIZE;
+        wall_tile[i].w = wall_tile[i].h = TILE_SIZE;
+    }
+}
+
+void init_game_board(void) {
+    /* Redirect rendering to the game board texture */
+    SDL_SetRenderTarget(renderer, txt_game_board);
+    SDL_RenderClear(renderer);
+
+    /* Fill background with random pattern of ground tiles */
+    int x, y;
+    SDL_Rect DstR = { 0, 0, TILE_SIZE, TILE_SIZE };
+    SDL_RenderClear(renderer);
+    for (y=0; y<game_board_h; y++)
+        for (x=0; x<game_board_w; x++) {
+            DstR.x = x*TILE_SIZE; DstR.y = y*TILE_SIZE;
+            SDL_RenderCopy(renderer, txt_env_tileset, &ground_tile[rand()%GROUND_TILES], &DstR);
+        }
+
+    /* Detach the game board texture from renderer */
+    SDL_SetRenderTarget(renderer, NULL);
+}
 
 void seed_item(FieldType item_type)
 {
@@ -52,6 +109,17 @@ void seed_item(FieldType item_type)
         if (game_board[game_board_w*y+x].type == Empty)
         {
             game_board[game_board_w*y+x].type = item_type;
+
+            /* render seeded wall to game board texture */
+            if (item_type == Wall) {
+                SDL_Rect DstR = { x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE };
+                /* Redirect rendering to the game board texture */
+                SDL_SetRenderTarget(renderer, txt_game_board);
+                /* Copy wall tile */
+                SDL_RenderCopy(renderer, txt_env_tileset, &wall_tile[rand()%WALL_TILES], &DstR);
+                /* Detach the game board texture from renderer */
+                SDL_SetRenderTarget(renderer, NULL);
+            }
             break;
         }
     }
@@ -59,30 +127,32 @@ void seed_item(FieldType item_type)
 
 void render_screen(void)
 {
+    /* every screen refresh everything is rendered from scratch */
     int x, y;
-    static SDL_Rect DstR = { 0, 0, TILE_SIZE, TILE_SIZE };
-    SDL_RenderClear(renderer);
-    for (y=0; y<game_board_h; y++)
+    SDL_Rect DstR = { 0, 0, TILE_SIZE, TILE_SIZE };
+    /* render game backround with walls */
+    SDL_RenderCopy(renderer, txt_game_board, NULL, NULL);
+
+    /* render snake body and food*/
+    for (y=0; y<game_board_h; y++) {
+        DstR.y = y*TILE_SIZE;
         for (x=0; x<game_board_w; x++) {
-            DstR.x = x*TILE_SIZE; DstR.y = y*TILE_SIZE;
-            SDL_RenderCopy(renderer, txt_ground, NULL, &DstR);
+            DstR.x = x*TILE_SIZE;
             switch(game_board[game_board_w*y+x].type) {
                 case Snake:
-                    if (x == hx && y == hy)
+                    if (x == hx && y == hy) /* snake head */
                         SDL_RenderCopy(renderer, txt_snake_head, NULL, &DstR);
-                    else
+                    else /* rest of snake body */
                         SDL_RenderCopy(renderer, txt_snake_body, NULL, &DstR);
                     break;
                 case Food:
                     SDL_RenderCopy(renderer, txt_food, NULL, &DstR);
                     break;
-                case Wall:
-                    SDL_RenderCopy(renderer, txt_wall, NULL, &DstR);
-                    break;
                 default:
                     break;
             }
         }
+    }
     SDL_RenderPresent(renderer);
 }
 
@@ -113,18 +183,24 @@ int main(int argc, char ** argv)
     /* init SDL library and load game resources */
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER);
     IMG_Init(IMG_INIT_PNG);
-    screen = SDL_CreateWindow("Snake game", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCR_W, SCR_H, 0);
-    renderer = SDL_CreateRenderer(screen, -1, 0);
-    srf_ground = IMG_Load("resources/tile_ground.png");
-    txt_ground = SDL_CreateTextureFromSurface(renderer, srf_ground);
+    screen = SDL_CreateWindow("Vonsh", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCR_W, SCR_H, 0);
+    renderer = SDL_CreateRenderer(screen, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE);
+
+    txt_game_board = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, SCR_W, SCR_H);
+
+    srf_env_tileset = IMG_Load("resources/board_tiles.png");
+    txt_env_tileset = SDL_CreateTextureFromSurface(renderer, srf_env_tileset);
     srf_snake_body = IMG_Load("resources/tile_snake_body.png");
     txt_snake_body = SDL_CreateTextureFromSurface(renderer, srf_snake_body);
     srf_snake_head = IMG_Load("resources/tile_snake_head.png");
     txt_snake_head = SDL_CreateTextureFromSurface(renderer, srf_snake_head);
     srf_food = IMG_Load("resources/tile_food.png");
     txt_food = SDL_CreateTextureFromSurface(renderer, srf_food);
-    srf_wall = IMG_Load("resources/tile_wall.png");
-    txt_wall = SDL_CreateTextureFromSurface(renderer, srf_wall);
+
+    /* initialize environment tileset info */
+    init_tiles();
+
+    init_game_board();
 
     /* initialize movement direction and position */
     score = expand_counter = 0;
@@ -167,12 +243,12 @@ int main(int argc, char ** argv)
                 game_board[game_board_w*hy+hx].type = Snake;
                 /* move snake tail */
                 if (expand_counter==0) {
-                    board_offset = game_board_w*ty+tx;
-                    tx = tx + game_board[board_offset].dx;
-                    ty = ty + game_board[board_offset].dy;
-                    game_board[board_offset].type = Empty;
-                    game_board[board_offset].dx = 0;
-                    game_board[board_offset].dy = 0;
+                    int toff = game_board_w*ty+tx; /* tail offset on game board */
+                    tx = tx + game_board[toff].dx;
+                    ty = ty + game_board[toff].dy;
+                    game_board[toff].type = Empty;
+                    game_board[toff].dx = 0;
+                    game_board[toff].dy = 0;
                 }
                 else {
                     seed_item(Wall);
@@ -202,16 +278,16 @@ int main(int argc, char ** argv)
 
     SDL_RemoveTimer(game_timer);
 
-    SDL_DestroyTexture(txt_wall);
     SDL_DestroyTexture(txt_food);
     SDL_DestroyTexture(txt_snake_head);
     SDL_DestroyTexture(txt_snake_body);
-    SDL_DestroyTexture(txt_ground);
-    SDL_FreeSurface(srf_wall);
+    SDL_DestroyTexture(txt_env_tileset);
+    SDL_DestroyTexture(txt_game_board);
+
     SDL_FreeSurface(srf_food);
     SDL_FreeSurface(srf_snake_head);
     SDL_FreeSurface(srf_snake_body);
-    SDL_FreeSurface(srf_ground);
+    SDL_FreeSurface(srf_env_tileset);
 
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(screen);
