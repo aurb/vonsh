@@ -15,10 +15,8 @@ SDL_Surface *srf_env_tileset = NULL;
 SDL_Texture *txt_env_tileset = NULL;
 SDL_Surface *srf_food_tileset = NULL;
 SDL_Texture *txt_food_tileset = NULL;
-SDL_Surface *srf_snake_body = NULL;
-SDL_Texture *txt_snake_body = NULL;
-SDL_Surface *srf_snake_head = NULL;
-SDL_Texture *txt_snake_head = NULL;
+SDL_Surface *srf_char_tileset = NULL;
+SDL_Texture *txt_char_tileset = NULL;
 SDL_TimerID game_timer = 0;
 
 SDL_Rect ground_tile[GROUND_TILES];
@@ -134,7 +132,9 @@ void render_screen(void)
 {
     /* every screen refresh everything is rendered from scratch */
     int x, y;
+    int toff; /* tile offset */
     SDL_Rect DstR = { 0, 0, TILE_SIZE, TILE_SIZE };
+    SDL_Rect SrcR = { 0, 0, TILE_SIZE, TILE_SIZE };
     /* render game backround with walls */
     SDL_RenderCopy(renderer, txt_game_board, NULL, NULL);
 
@@ -143,16 +143,33 @@ void render_screen(void)
         DstR.y = y*TILE_SIZE;
         for (x=0; x<game_board_w; x++) {
             DstR.x = x*TILE_SIZE;
-            switch(game_board[game_board_w*y+x].type) {
+            toff = game_board_w*y+x;
+            switch(game_board[toff].type) {
                 case Snake:
-                    if (x == hx && y == hy) /* snake head */
-                        SDL_RenderCopy(renderer, txt_snake_head, NULL, &DstR);
-                    else /* rest of snake body */
-                        SDL_RenderCopy(renderer, txt_snake_body, NULL, &DstR);
+                    if (game_board[toff].dx == 0 && game_board[toff].dy == 1) {
+                        SrcR.x = 0;
+                    }
+                    else if (game_board[toff].dx == 1 && game_board[toff].dy == 0) {
+                        SrcR.x = TILE_SIZE;
+                    }
+                    else if (game_board[toff].dx == 0 && game_board[toff].dy == -1) {
+                        SrcR.x = 2*TILE_SIZE;
+                    }
+                    else if (game_board[toff].dx == -1 && game_board[toff].dy == 0) {
+                        SrcR.x = 3*TILE_SIZE;
+                    }
+                    if (x == hx && y == hy) {/* snake head */
+                        SrcR.y = 1;
+                        SDL_RenderCopy(renderer, txt_char_tileset, &SrcR, &DstR);
+                    }
+                    else {/* rest of snake body */
+                        SrcR.y = 3*(TILE_SIZE+1);
+                        SDL_RenderCopy(renderer, txt_char_tileset, &SrcR, &DstR);
+                    }
                     break;
                 case Food:
                     SDL_RenderCopy(renderer, txt_food_tileset,
-                                   &food_tile[game_board[game_board_w*y+x].p], &DstR);
+                                   &food_tile[game_board[toff].p], &DstR);
                     break;
                 default:
                     break;
@@ -200,10 +217,8 @@ int main(int argc, char ** argv)
     txt_env_tileset = SDL_CreateTextureFromSurface(renderer, srf_env_tileset);
     srf_food_tileset = IMG_Load("resources/food_tiles.png");
     txt_food_tileset = SDL_CreateTextureFromSurface(renderer, srf_food_tileset);
-    srf_snake_body = IMG_Load("resources/tile_snake_body.png");
-    txt_snake_body = SDL_CreateTextureFromSurface(renderer, srf_snake_body);
-    srf_snake_head = IMG_Load("resources/tile_snake_head.png");
-    txt_snake_head = SDL_CreateTextureFromSurface(renderer, srf_snake_head);
+    srf_char_tileset = IMG_Load("resources/character_tiles.png");
+    txt_char_tileset = SDL_CreateTextureFromSurface(renderer, srf_char_tileset);
 
     /* initialize environment tileset info */
     init_tiles();
@@ -215,6 +230,9 @@ int main(int argc, char ** argv)
     dhx = 0;   dhy = -1;
     hx = tx = SCR_W/(TILE_SIZE*2);   hy = ty = SCR_H/(TILE_SIZE*2);
     game_board[game_board_w*hy+hx].type = Snake;
+    game_board[game_board_w*hy+hx].p = 0;
+    game_board[game_board_w*hy+hx].dx = dhx;
+    game_board[game_board_w*hy+hx].dy = dhy;
     seed_item(Food);
     render_screen();
 
@@ -235,6 +253,7 @@ int main(int argc, char ** argv)
                     break;
                 }
                 else if (game_board[game_board_w*(hy+dhy)+hx+dhx].type == Food) {
+                    /* food hit - increase score, start expanding snake, seed new food */
                     score++;
                     expand_counter += score;
                     seed_item(Food);
@@ -245,11 +264,13 @@ int main(int argc, char ** argv)
                     break;
                 }
                 /* move snake head */
-                game_board[game_board_w*hy+hx].dx = dhx;
+                game_board[game_board_w*hy+hx].dx = dhx; /* "neck" direction */
                 game_board[game_board_w*hy+hx].dy = dhy;
                 hx += dhx;    hy += dhy;
                 game_board[game_board_w*hy+hx].type = Snake;
                 game_board[game_board_w*hy+hx].p = 0;
+                game_board[game_board_w*hy+hx].dx = dhx; /* head direction */
+                game_board[game_board_w*hy+hx].dy = dhy;
                 /* move snake tail */
                 if (expand_counter==0) {
                     int toff = game_board_w*ty+tx; /* tail offset on game board */
@@ -270,6 +291,8 @@ int main(int argc, char ** argv)
                 if (event.key.keysym.sym == SDLK_ESCAPE) {
                     quit = 1;
                 }
+/*TODO: ERROR: assuming that you move "right", pressing in very quick succession
+        "Up" and "Left" causes move backwards */
                 else if (event.key.repeat == 0) {
                     switch (event.key.keysym.sym) {
                         case SDLK_LEFT:  if (dhx == 0) { dhx = -1; dhy = 0; } break;
@@ -287,14 +310,12 @@ int main(int argc, char ** argv)
 
     SDL_RemoveTimer(game_timer);
 
-    SDL_DestroyTexture(txt_snake_head);
-    SDL_DestroyTexture(txt_snake_body);
+    SDL_DestroyTexture(txt_char_tileset);
     SDL_DestroyTexture(txt_env_tileset);
     SDL_DestroyTexture(txt_food_tileset);
     SDL_DestroyTexture(txt_game_board);
 
-    SDL_FreeSurface(srf_snake_head);
-    SDL_FreeSurface(srf_snake_body);
+    SDL_FreeSurface(srf_char_tileset);
     SDL_FreeSurface(srf_env_tileset);
     SDL_FreeSurface(srf_food_tileset);
 

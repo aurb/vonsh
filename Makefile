@@ -1,7 +1,7 @@
 PROGRAM = vonsh
 OBJS = vonsh.o
 CC = gcc
-CFLAGS = -Wall
+CFLAGS = -Wall -O3
 LDFLAGS = -lSDL2 -lSDL2main -lSDL2_image
 all: $(PROGRAM)
 clean:
