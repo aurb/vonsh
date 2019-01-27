@@ -8,6 +8,7 @@
 #define GROUND_TILES 8
 #define WALL_TILES 4
 #define FOOD_TILES 6
+#define TOTAL_CHAR 12
 SDL_Window *screen = NULL;
 SDL_Renderer *renderer = NULL;
 SDL_Texture *txt_game_board = NULL;
@@ -39,7 +40,7 @@ typedef enum e_FieldType { /* indicates what is inside game board field */
 
 typedef struct BoardField {
     FieldType type; /* type of this field */
-    int p; /* item paremeter(kind of food, kind of wall, etc.) */
+    int p; /* paremeter(kind of character in snake body, kind of food, kind of wall ) */
     int dx; /* delta x to next piece of snake. 0 if head */
     int dy; /* delta y to next piece of snake. 0 if head */
 } BoardField;
@@ -158,14 +159,8 @@ void render_screen(void)
                     else if (game_board[toff].dx == -1 && game_board[toff].dy == 0) {
                         SrcR.x = 3*TILE_SIZE;
                     }
-                    if (x == hx && y == hy) {/* snake head */
-                        SrcR.y = 1;
-                        SDL_RenderCopy(renderer, txt_char_tileset, &SrcR, &DstR);
-                    }
-                    else {/* rest of snake body */
-                        SrcR.y = 3*(TILE_SIZE+1);
-                        SDL_RenderCopy(renderer, txt_char_tileset, &SrcR, &DstR);
-                    }
+                    SrcR.y = game_board[toff].p*3*(TILE_SIZE+1) + 1;
+                    SDL_RenderCopy(renderer, txt_char_tileset, &SrcR, &DstR);
                     break;
                 case Food:
                     SDL_RenderCopy(renderer, txt_food_tileset,
@@ -230,7 +225,7 @@ int main(int argc, char ** argv)
     dhx = 0;   dhy = -1;
     hx = tx = SCR_W/(TILE_SIZE*2);   hy = ty = SCR_H/(TILE_SIZE*2);
     game_board[game_board_w*hy+hx].type = Snake;
-    game_board[game_board_w*hy+hx].p = 0;
+    game_board[game_board_w*hy+hx].p = rand()%TOTAL_CHAR;
     game_board[game_board_w*hy+hx].dx = dhx;
     game_board[game_board_w*hy+hx].dy = dhy;
     seed_item(Food);
@@ -238,6 +233,8 @@ int main(int argc, char ** argv)
 
     /* init timer and trigger rendering of first frame */
     game_timer = SDL_AddTimer(GAME_SPEED, tick_callback, 0);
+    int pb1, pb2; /* buffers for shifting character kinds from tail to head */
+    int ix, iy, toff;
 
     while (!quit)
     {
@@ -268,19 +265,34 @@ int main(int argc, char ** argv)
                 game_board[game_board_w*hy+hx].dy = dhy;
                 hx += dhx;    hy += dhy;
                 game_board[game_board_w*hy+hx].type = Snake;
-                game_board[game_board_w*hy+hx].p = 0;
                 game_board[game_board_w*hy+hx].dx = dhx; /* head direction */
                 game_board[game_board_w*hy+hx].dy = dhy;
+
+                /* shift character kinds from tail to head */
+                ix = tx; iy = ty;
+                pb1 = game_board[game_board_w*iy+ix].p;
+                do {
+                    toff = game_board_w*iy+ix;
+                    ix = ix + game_board[toff].dx;
+                    iy = iy + game_board[toff].dy;
+                    toff = game_board_w*iy+ix;
+                    pb2 = game_board[toff].p;
+                    game_board[toff].p = pb1;
+                    pb1 = pb2;
+                } while(ix!=hx || iy!=hy);
+
                 /* move snake tail */
                 if (expand_counter==0) {
-                    int toff = game_board_w*ty+tx; /* tail offset on game board */
+                    toff = game_board_w*ty+tx; /* tail offset on game board */
                     tx = tx + game_board[toff].dx;
                     ty = ty + game_board[toff].dy;
                     game_board[toff].type = Empty;
+                    game_board[toff].p = 0;
                     game_board[toff].dx = 0;
                     game_board[toff].dy = 0;
                 }
-                else {
+                else { /* expand tail and seed new obstacle */
+                    game_board[game_board_w*ty+tx].p = rand()%TOTAL_CHAR;
                     seed_item(Wall);
                     expand_counter--;
                 }
