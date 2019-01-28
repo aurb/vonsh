@@ -1,6 +1,20 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 
+typedef enum e_FieldType { /* indicates what is inside game board field */
+    Empty,
+    Snake,
+    Food,
+    Wall
+} FieldType;
+
+typedef struct BoardField {
+    FieldType type; /* type of this field */
+    int p; /* paremeter(kind of character in snake body, kind of food, kind of wall ) */
+    int dx; /* delta x to next piece of snake. 0 if head */
+    int dy; /* delta y to next piece of snake. 0 if head */
+} BoardField;
+
 #define SCR_W 1024
 #define SCR_H 768
 #define TILE_SIZE 16
@@ -23,6 +37,7 @@ SDL_TimerID game_timer = 0;
 SDL_Rect ground_tile[GROUND_TILES];
 SDL_Rect wall_tile[WALL_TILES];
 SDL_Rect food_tile[FOOD_TILES];
+BoardField *game_board = NULL;
 
 const int game_board_w = SCR_W/TILE_SIZE, game_board_h = SCR_H/TILE_SIZE;
 int dhx=0, dhy=0;     /* head movement direction */
@@ -30,21 +45,7 @@ int hx=0, hy=0;       /* head coordinates */
 int tx=0, ty=0;       /* tail coordinates */
 int score=0;          /* player's score, number of food eaten */
 int expand_counter=0; /* counter of snake segments to add and walls to seed */
-
-typedef enum e_FieldType { /* indicates what is inside game board field */
-    Empty,
-    Snake,
-    Food,
-    Wall
-} FieldType;
-
-typedef struct BoardField {
-    FieldType type; /* type of this field */
-    int p; /* paremeter(kind of character in snake body, kind of food, kind of wall ) */
-    int dx; /* delta x to next piece of snake. 0 if head */
-    int dy; /* delta y to next piece of snake. 0 if head */
-} BoardField;
-BoardField *game_board = NULL;
+int ck_press=0;       /* control key pressed indicator */
 
 void init_tiles(void) {
     ground_tile[0].x = 0;   ground_tile[0].y = 0;
@@ -133,7 +134,7 @@ void render_screen(void)
 {
     /* every screen refresh everything is rendered from scratch */
     int x, y;
-    int toff; /* tile offset */
+    int foff; /* game board field offset */
     SDL_Rect DstR = { 0, 0, TILE_SIZE, TILE_SIZE };
     SDL_Rect SrcR = { 0, 0, TILE_SIZE, TILE_SIZE };
     /* render game backround with walls */
@@ -144,27 +145,27 @@ void render_screen(void)
         DstR.y = y*TILE_SIZE;
         for (x=0; x<game_board_w; x++) {
             DstR.x = x*TILE_SIZE;
-            toff = game_board_w*y+x;
-            switch(game_board[toff].type) {
+            foff = game_board_w*y+x;
+            switch(game_board[foff].type) {
                 case Snake:
-                    if (game_board[toff].dx == 0 && game_board[toff].dy == 1) {
+                    if (game_board[foff].dx == 0 && game_board[foff].dy == 1) {
                         SrcR.x = 0;
                     }
-                    else if (game_board[toff].dx == 1 && game_board[toff].dy == 0) {
+                    else if (game_board[foff].dx == 1 && game_board[foff].dy == 0) {
                         SrcR.x = TILE_SIZE;
                     }
-                    else if (game_board[toff].dx == 0 && game_board[toff].dy == -1) {
+                    else if (game_board[foff].dx == 0 && game_board[foff].dy == -1) {
                         SrcR.x = 2*TILE_SIZE;
                     }
-                    else if (game_board[toff].dx == -1 && game_board[toff].dy == 0) {
+                    else if (game_board[foff].dx == -1 && game_board[foff].dy == 0) {
                         SrcR.x = 3*TILE_SIZE;
                     }
-                    SrcR.y = game_board[toff].p*3*(TILE_SIZE+1) + 1;
+                    SrcR.y = game_board[foff].p*3*(TILE_SIZE+1) + 1;
                     SDL_RenderCopy(renderer, txt_char_tileset, &SrcR, &DstR);
                     break;
                 case Food:
                     SDL_RenderCopy(renderer, txt_food_tileset,
-                                   &food_tile[game_board[toff].p], &DstR);
+                                   &food_tile[game_board[foff].p], &DstR);
                     break;
                 default:
                     break;
@@ -172,6 +173,71 @@ void render_screen(void)
         }
     }
     SDL_RenderPresent(renderer);
+}
+
+/* one iteration of game logic
+    retval:
+    0 - game continues
+    1 - game over
+ */
+int game_logic(void)
+{
+    /* verify all kinds of collisions */
+    if (hx+dhx < 0             || hy+dhy < 0 ||
+        hx+dhx >= game_board_w || hy+dhy >= game_board_h) {
+        /* collision with game board edge */
+        return 1; /* GAME OVER */
+    }
+    else if (game_board[game_board_w*(hy+dhy)+hx+dhx].type == Food) {
+        /* food hit - increase score, start expanding snake, seed new food */
+        score++;
+        expand_counter += score;
+        seed_item(Food);
+    }
+    else if (game_board[game_board_w*(hy+dhy)+hx+dhx].type != Empty) {
+        /* collision with snake body or wall */
+        return 1; /* GAME OVER */
+    }
+    int foff; /* game board field offset */
+    /* move snake head */
+    foff = game_board_w*hy+hx;
+    game_board[foff].dx = dhx; /* "neck" direction */
+    game_board[foff].dy = dhy;
+    hx += dhx;    hy += dhy;
+    foff = game_board_w*hy+hx;
+    game_board[foff].type = Snake;
+    game_board[foff].dx = dhx; /* head direction */
+    game_board[foff].dy = dhy;
+
+    /* shift character kinds from tail to head */
+    int ix = tx, iy = ty;
+    int pb1, pb2; /* buffers for shifting character kinds from tail to head */
+    pb1 = game_board[game_board_w*iy+ix].p;
+    do {
+        foff = game_board_w*iy+ix;
+        ix = ix + game_board[foff].dx;
+        iy = iy + game_board[foff].dy;
+        foff = game_board_w*iy+ix;
+        pb2 = game_board[foff].p;
+        game_board[foff].p = pb1;
+        pb1 = pb2;
+    } while(ix!=hx || iy!=hy);
+
+    if (expand_counter==0) { /* move snake tail if not expanding */
+        foff = game_board_w*ty+tx; /* tail offset on game board */
+        tx = tx + game_board[foff].dx;
+        ty = ty + game_board[foff].dy;
+        game_board[foff].type = Empty;
+        game_board[foff].p = 0;
+        game_board[foff].dx = 0;
+        game_board[foff].dy = 0;
+    }
+    else { /* expand tail and seed new obstacle */
+        game_board[game_board_w*ty+tx].p = rand()%TOTAL_CHAR;
+        seed_item(Wall);
+        expand_counter--;
+    }
+    return 0;
 }
 
 uint32_t tick_callback(uint32_t interval, void *param)
@@ -233,8 +299,6 @@ int main(int argc, char ** argv)
 
     /* init timer and trigger rendering of first frame */
     game_timer = SDL_AddTimer(GAME_SPEED, tick_callback, 0);
-    int pb1, pb2; /* buffers for shifting character kinds from tail to head */
-    int ix, iy, toff;
 
     while (!quit)
     {
@@ -242,75 +306,24 @@ int main(int argc, char ** argv)
         switch (event.type)
         {
             case SDL_USEREVENT: /* game tick event */
-                /* main game logic */
-                if (hx+dhx < 0             || hy+dhy < 0 ||
-                    hx+dhx >= game_board_w || hy+dhy >= game_board_h) {
-                    /* collision with game board edge */
-                    quit = 1; /* GAME OVER */
-                    break;
+                if (game_logic()) {
+                    quit = 1; /* GAME OVER, no need to render next frame */
                 }
-                else if (game_board[game_board_w*(hy+dhy)+hx+dhx].type == Food) {
-                    /* food hit - increase score, start expanding snake, seed new food */
-                    score++;
-                    expand_counter += score;
-                    seed_item(Food);
+                else { /* game continues */
+                    render_screen(); /* render next frame */
+                    ck_press = 0; /* allow new control key press */
                 }
-                else if (game_board[game_board_w*(hy+dhy)+hx+dhx].type != Empty) {
-                    /* collision with snake body or wall */
-                    quit = 1; /* GAME OVER */
-                    break;
-                }
-                /* move snake head */
-                game_board[game_board_w*hy+hx].dx = dhx; /* "neck" direction */
-                game_board[game_board_w*hy+hx].dy = dhy;
-                hx += dhx;    hy += dhy;
-                game_board[game_board_w*hy+hx].type = Snake;
-                game_board[game_board_w*hy+hx].dx = dhx; /* head direction */
-                game_board[game_board_w*hy+hx].dy = dhy;
-
-                /* shift character kinds from tail to head */
-                ix = tx; iy = ty;
-                pb1 = game_board[game_board_w*iy+ix].p;
-                do {
-                    toff = game_board_w*iy+ix;
-                    ix = ix + game_board[toff].dx;
-                    iy = iy + game_board[toff].dy;
-                    toff = game_board_w*iy+ix;
-                    pb2 = game_board[toff].p;
-                    game_board[toff].p = pb1;
-                    pb1 = pb2;
-                } while(ix!=hx || iy!=hy);
-
-                /* move snake tail */
-                if (expand_counter==0) {
-                    toff = game_board_w*ty+tx; /* tail offset on game board */
-                    tx = tx + game_board[toff].dx;
-                    ty = ty + game_board[toff].dy;
-                    game_board[toff].type = Empty;
-                    game_board[toff].p = 0;
-                    game_board[toff].dx = 0;
-                    game_board[toff].dy = 0;
-                }
-                else { /* expand tail and seed new obstacle */
-                    game_board[game_board_w*ty+tx].p = rand()%TOTAL_CHAR;
-                    seed_item(Wall);
-                    expand_counter--;
-                }
-
-                render_screen();
                 break;
             case SDL_KEYDOWN:
                 if (event.key.keysym.sym == SDLK_ESCAPE) {
                     quit = 1;
                 }
-/*TODO: ERROR: assuming that you move "right", pressing in very quick succession
-        "Up" and "Left" causes move backwards */
-                else if (event.key.repeat == 0) {
+                else if (event.key.repeat == 0 && ck_press == 0) {
                     switch (event.key.keysym.sym) {
-                        case SDLK_LEFT:  if (dhx == 0) { dhx = -1; dhy = 0; } break;
-                        case SDLK_RIGHT: if (dhx == 0) { dhx = 1; dhy = 0; } break;
-                        case SDLK_UP:    if (dhy == 0) { dhx = 0; dhy = -1; } break;
-                        case SDLK_DOWN:  if (dhy == 0) { dhx = 0; dhy = 1; } break;
+                        case SDLK_LEFT:  if (dhx == 0) { dhx = -1; dhy = 0; ck_press = 1; } break;
+                        case SDLK_RIGHT: if (dhx == 0) { dhx = 1; dhy = 0; ck_press = 1; } break;
+                        case SDLK_UP:    if (dhy == 0) { dhx = 0; dhy = -1; ck_press = 1; } break;
+                        case SDLK_DOWN:  if (dhy == 0) { dhx = 0; dhy = 1; ck_press = 1; } break;
                     }
                 }
                 break;
