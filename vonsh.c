@@ -11,8 +11,10 @@ typedef enum e_FieldType { /* indicates what is inside game board field */
 typedef struct BoardField {
     FieldType type; /* type of this field */
     int p; /* paremeter(kind of character in snake body, kind of food, kind of wall ) */
-    int dx; /* delta x to next piece of snake. 0 if head */
-    int dy; /* delta y to next piece of snake. 0 if head */
+    int ndx; /* delta x to next piece of snake. */
+    int ndy; /* delta y to next piece of snake. */
+    int pdx; /* delta x to previous piece of snake. */
+    int pdy; /* delta y to previous piece of snake. */
 } BoardField;
 
 #define SCR_W 1024
@@ -23,6 +25,7 @@ typedef struct BoardField {
 #define WALL_TILES 4
 #define FOOD_TILES 6
 #define TOTAL_CHAR 12
+#define CHAR_ANIM_FRAMES 4
 SDL_Window *screen = NULL;
 SDL_Renderer *renderer = NULL;
 SDL_Texture *txt_game_board = NULL;
@@ -46,6 +49,7 @@ int tx=0, ty=0;       /* tail coordinates */
 int score=0;          /* player's score, number of food eaten */
 int expand_counter=0; /* counter of snake segments to add and walls to seed */
 int ck_press=0;       /* control key pressed indicator */
+int frame=0;          /* animation frame */
 
 void init_tiles(void) {
     ground_tile[0].x = 0;   ground_tile[0].y = 0;
@@ -83,6 +87,16 @@ void init_tiles(void) {
 }
 
 void init_game_board(void) {
+    /* allocate and initialize game board */
+    game_board = calloc(game_board_w*game_board_h, sizeof(BoardField));
+    for (int i=0; i<game_board_w*game_board_h; i++) {
+        game_board[i].type = Empty;
+        game_board[i].ndx = 0;
+        game_board[i].ndy = 0;
+        game_board[i].pdx = 0;
+        game_board[i].pdy = 0;
+    }
+
     /* Redirect rendering to the game board texture */
     SDL_SetRenderTarget(renderer, txt_game_board);
     SDL_RenderClear(renderer);
@@ -142,28 +156,43 @@ void render_screen(void)
 
     /* render snake body and food*/
     for (y=0; y<game_board_h; y++) {
-        DstR.y = y*TILE_SIZE;
         for (x=0; x<game_board_w; x++) {
-            DstR.x = x*TILE_SIZE;
             foff = game_board_w*y+x;
             switch(game_board[foff].type) {
                 case Snake:
-                    if (game_board[foff].dx == 0 && game_board[foff].dy == 1) {
+                    /* select direction of character based on snake piece direction */
+                    if (-game_board[foff].pdx == 0 && -game_board[foff].pdy == 1) {
                         SrcR.x = 0;
                     }
-                    else if (game_board[foff].dx == 1 && game_board[foff].dy == 0) {
+                    else if (-game_board[foff].pdx == 1 && -game_board[foff].pdy == 0) {
                         SrcR.x = TILE_SIZE;
                     }
-                    else if (game_board[foff].dx == 0 && game_board[foff].dy == -1) {
+                    else if (-game_board[foff].pdx == 0 && -game_board[foff].pdy == -1) {
                         SrcR.x = 2*TILE_SIZE;
                     }
-                    else if (game_board[foff].dx == -1 && game_board[foff].dy == 0) {
+                    else if (-game_board[foff].pdx == -1 && -game_board[foff].pdy == 0) {
                         SrcR.x = 3*TILE_SIZE;
                     }
+                    /* select type of character based on game board field parameter */
                     SrcR.y = game_board[foff].p*3*(TILE_SIZE+1) + 1;
+                    /* select character animation frame based on frame counter */
+                    if (frame == 1) {
+                        SrcR.y += (TILE_SIZE+1);
+                    }
+                    else if (frame == 3) {
+                        SrcR.y += 2*(TILE_SIZE+1);
+                    }
+                    /* select character position on screen */
+                    DstR.x = x*TILE_SIZE;
+                    DstR.y = y*TILE_SIZE;
+                    DstR.x += (CHAR_ANIM_FRAMES-frame)*game_board[foff].pdx*TILE_SIZE/CHAR_ANIM_FRAMES;
+                    DstR.y += (CHAR_ANIM_FRAMES-frame)*game_board[foff].pdy*TILE_SIZE/CHAR_ANIM_FRAMES;
+                    /* render character to screen buffer */
                     SDL_RenderCopy(renderer, txt_char_tileset, &SrcR, &DstR);
                     break;
                 case Food:
+                    DstR.x = x*TILE_SIZE;
+                    DstR.y = y*TILE_SIZE;
                     SDL_RenderCopy(renderer, txt_food_tileset,
                                    &food_tile[game_board[foff].p], &DstR);
                     break;
@@ -180,7 +209,7 @@ void render_screen(void)
     0 - game continues
     1 - game over
  */
-int game_logic(void)
+int update_game_state(void)
 {
     /* verify all kinds of collisions */
     if (hx+dhx < 0             || hy+dhy < 0 ||
@@ -201,36 +230,39 @@ int game_logic(void)
     int foff; /* game board field offset */
     /* move snake head */
     foff = game_board_w*hy+hx;
-    game_board[foff].dx = dhx; /* "neck" direction */
-    game_board[foff].dy = dhy;
-    hx += dhx;    hy += dhy;
+    game_board[foff].ndx = dhx; /* update "neck" direction towards new head position */
+    game_board[foff].ndy = dhy;
+    hx += dhx;    hy += dhy; /* update head position */
     foff = game_board_w*hy+hx;
     game_board[foff].type = Snake;
-    game_board[foff].dx = dhx; /* head direction */
-    game_board[foff].dy = dhy;
+    game_board[foff].ndx = dhx; /* update head direction */
+    game_board[foff].ndy = dhy;
+    game_board[foff].pdx = -dhx;
+    game_board[foff].pdy = -dhy;
 
-    /* shift character kinds from tail to head */
-    int ix = tx, iy = ty;
+    int ix = tx, iy = ty; /* indexes used for traversing snake body */
     int pb1, pb2; /* buffers for shifting character kinds from tail to head */
+    /* shift character kinds from tail to head */
     pb1 = game_board[game_board_w*iy+ix].p;
     do {
+        /* move character kind from previous position to next. */
         foff = game_board_w*iy+ix;
-        ix = ix + game_board[foff].dx;
-        iy = iy + game_board[foff].dy;
+        ix = ix + game_board[foff].ndx;
+        iy = iy + game_board[foff].ndy;
         foff = game_board_w*iy+ix;
-        pb2 = game_board[foff].p;
-        game_board[foff].p = pb1;
-        pb1 = pb2;
+        pb2 = game_board[foff].p; /* buffer current character kind... */
+        game_board[foff].p = pb1; /* and overwrite it with previous kind... */
+        pb1 = pb2; /* and then exchange buffers */
     } while(ix!=hx || iy!=hy);
 
     if (expand_counter==0) { /* move snake tail if not expanding */
         foff = game_board_w*ty+tx; /* tail offset on game board */
-        tx = tx + game_board[foff].dx;
-        ty = ty + game_board[foff].dy;
+        tx = tx + game_board[foff].ndx;
+        ty = ty + game_board[foff].ndy;
         game_board[foff].type = Empty;
         game_board[foff].p = 0;
-        game_board[foff].dx = 0;
-        game_board[foff].dy = 0;
+        game_board[foff].ndx = game_board[foff].pdx = 0;
+        game_board[foff].ndy = game_board[foff].pdy = 0;
     }
     else { /* expand tail and seed new obstacle */
         game_board[game_board_w*ty+tx].p = rand()%TOTAL_CHAR;
@@ -255,14 +287,6 @@ int main(int argc, char ** argv)
 {
     int quit = 0;
     SDL_Event event;
-
-    /* allocate and initialize game board */
-    game_board = calloc(game_board_w*game_board_h, sizeof(BoardField));
-    for (int i=0; i<game_board_w*game_board_h; i++) {
-        game_board[i].type = Empty;
-        game_board[i].dx = 0;
-        game_board[i].dy = 0;
-    }
 
     /* init SDL library and load game resources */
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER);
@@ -292,13 +316,16 @@ int main(int argc, char ** argv)
     hx = tx = SCR_W/(TILE_SIZE*2);   hy = ty = SCR_H/(TILE_SIZE*2);
     game_board[game_board_w*hy+hx].type = Snake;
     game_board[game_board_w*hy+hx].p = rand()%TOTAL_CHAR;
-    game_board[game_board_w*hy+hx].dx = dhx;
-    game_board[game_board_w*hy+hx].dy = dhy;
+    game_board[game_board_w*hy+hx].ndx = dhx;
+    game_board[game_board_w*hy+hx].ndy = dhy;
+    game_board[game_board_w*hy+hx].pdx = -dhx;
+    game_board[game_board_w*hy+hx].pdy = -dhy;
     seed_item(Food);
+    frame = 0;
     render_screen();
 
     /* init timer and trigger rendering of first frame */
-    game_timer = SDL_AddTimer(GAME_SPEED, tick_callback, 0);
+    game_timer = SDL_AddTimer(GAME_SPEED/CHAR_ANIM_FRAMES, tick_callback, 0);
 
     while (!quit)
     {
@@ -306,12 +333,18 @@ int main(int argc, char ** argv)
         switch (event.type)
         {
             case SDL_USEREVENT: /* game tick event */
-                if (game_logic()) {
-                    quit = 1; /* GAME OVER, no need to render next frame */
+                frame = (frame+1) % CHAR_ANIM_FRAMES;
+                if (frame % CHAR_ANIM_FRAMES) {
+                    render_screen(); /* animation frame without game state update */
                 }
-                else { /* game continues */
-                    render_screen(); /* render next frame */
-                    ck_press = 0; /* allow new control key press */
+                else {
+                    if (update_game_state()) {
+                        quit = 1; /* GAME OVER, no need to render next frame */
+                    }
+                    else { /* game continues */
+                        render_screen(); /* render next frame */
+                        ck_press = 0; /* allow new control key press */
+                    }
                 }
                 break;
             case SDL_KEYDOWN:
