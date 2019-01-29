@@ -1,6 +1,19 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 
+typedef enum e_TextAlignment {
+    Left,
+    Center,
+    Right
+} TextAlignment;
+
+typedef enum e_GameState {
+    NotStarted,
+    Playing,
+    Paused,
+    GameOver
+} GameState;
+
 typedef enum e_FieldType { /* indicates what is inside game board field */
     Empty,
     Snake,
@@ -41,6 +54,7 @@ SDL_Rect ground_tile[GROUND_TILES];
 SDL_Rect wall_tile[WALL_TILES];
 SDL_Rect food_tile[FOOD_TILES];
 BoardField *game_board = NULL;
+GameState game_state = NotStarted;
 
 const int game_board_w = SCR_W/TILE_SIZE, game_board_h = SCR_H/TILE_SIZE;
 int dhx=0, dhy=0;     /* head movement direction */
@@ -88,7 +102,9 @@ void init_tiles(void) {
 
 void init_game_board(void) {
     /* allocate and initialize game board */
-    game_board = calloc(game_board_w*game_board_h, sizeof(BoardField));
+    if (game_board == NULL) {
+        game_board = calloc(game_board_w*game_board_h, sizeof(BoardField));
+    }
     for (int i=0; i<game_board_w*game_board_h; i++) {
         game_board[i].type = Empty;
         game_board[i].ndx = 0;
@@ -283,6 +299,41 @@ uint32_t tick_callback(uint32_t interval, void *param)
     return interval;
 }
 
+void start_new_game(void) {
+    /* initialize movement direction and position */
+    init_game_board();
+
+    score = expand_counter = 0;
+    dhx = 0;   dhy = -1;
+    hx = tx = SCR_W/(TILE_SIZE*2);   hy = ty = SCR_H/(TILE_SIZE*2);
+    game_board[game_board_w*hy+hx].type = Snake;
+    game_board[game_board_w*hy+hx].p = rand()%TOTAL_CHAR;
+    game_board[game_board_w*hy+hx].ndx = dhx;
+    game_board[game_board_w*hy+hx].ndy = dhy;
+    game_board[game_board_w*hy+hx].pdx = -dhx;
+    game_board[game_board_w*hy+hx].pdy = -dhy;
+    seed_item(Food);
+    ck_press = 0;
+    frame = 0;
+    game_state = Playing;
+
+    render_screen();
+    /* init timer and trigger rendering of first frame */
+    game_timer = SDL_AddTimer(GAME_SPEED/CHAR_ANIM_FRAMES, tick_callback, 0);
+}
+
+void pause_game() {
+    game_state = Paused;
+    SDL_RemoveTimer(game_timer);
+}
+
+void resume_game() {
+    ck_press = 0;
+    game_state = Playing;
+    /* TODO: create timer only once - when program is run. Do not delete it afterwards, only reuse. */
+    game_timer = SDL_AddTimer(GAME_SPEED/CHAR_ANIM_FRAMES, tick_callback, 0);
+}
+
 int main(int argc, char ** argv)
 {
     int quit = 0;
@@ -310,22 +361,9 @@ int main(int argc, char ** argv)
 
     init_game_board();
 
-    /* initialize movement direction and position */
-    score = expand_counter = 0;
-    dhx = 0;   dhy = -1;
-    hx = tx = SCR_W/(TILE_SIZE*2);   hy = ty = SCR_H/(TILE_SIZE*2);
-    game_board[game_board_w*hy+hx].type = Snake;
-    game_board[game_board_w*hy+hx].p = rand()%TOTAL_CHAR;
-    game_board[game_board_w*hy+hx].ndx = dhx;
-    game_board[game_board_w*hy+hx].ndy = dhy;
-    game_board[game_board_w*hy+hx].pdx = -dhx;
-    game_board[game_board_w*hy+hx].pdy = -dhy;
-    seed_item(Food);
-    frame = 0;
-    render_screen();
+    game_state = NotStarted;
 
-    /* init timer and trigger rendering of first frame */
-    game_timer = SDL_AddTimer(GAME_SPEED/CHAR_ANIM_FRAMES, tick_callback, 0);
+    render_screen();
 
     while (!quit)
     {
@@ -333,17 +371,20 @@ int main(int argc, char ** argv)
         switch (event.type)
         {
             case SDL_USEREVENT: /* game tick event */
-                frame = (frame+1) % CHAR_ANIM_FRAMES;
-                if (frame % CHAR_ANIM_FRAMES) {
-                    render_screen(); /* animation frame without game state update */
-                }
-                else {
-                    if (update_game_state()) {
-                        quit = 1; /* GAME OVER, no need to render next frame */
+                if (game_state == Playing) {
+                    frame = (frame+1) % CHAR_ANIM_FRAMES;
+                    if (frame % CHAR_ANIM_FRAMES) {
+                        render_screen(); /* animation frame without game state update */
                     }
-                    else { /* game continues */
-                        render_screen(); /* render next frame */
-                        ck_press = 0; /* allow new control key press */
+                    else {
+                        if (update_game_state()) {
+                            SDL_RemoveTimer(game_timer);
+                            game_state = GameOver; /* GAME OVER, no need to render next frame */
+                        }
+                        else { /* game continues */
+                            render_screen(); /* render next frame */
+                            ck_press = 0; /* allow new control key press */
+                        }
                     }
                 }
                 break;
@@ -351,7 +392,26 @@ int main(int argc, char ** argv)
                 if (event.key.keysym.sym == SDLK_ESCAPE) {
                     quit = 1;
                 }
-                else if (event.key.repeat == 0 && ck_press == 0) {
+                else if (event.key.keysym.sym == SDLK_SPACE) {
+                    switch (game_state) {
+                        case NotStarted:
+                        case GameOver:
+                            /* start new game */
+                            start_new_game();
+                            break;
+                        case Playing:
+                            /* pause game */
+                            pause_game();
+                            break;
+                        case Paused:
+                            /* resume game */
+                            resume_game();
+                            break;
+                        default:
+                            break;
+                    }
+                }
+                else if (game_state == Playing && event.key.repeat == 0 && ck_press == 0) {
                     switch (event.key.keysym.sym) {
                         case SDLK_LEFT:  if (dhx == 0) { dhx = -1; dhy = 0; ck_press = 1; } break;
                         case SDLK_RIGHT: if (dhx == 0) { dhx = 1; dhy = 0; ck_press = 1; } break;
