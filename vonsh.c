@@ -154,14 +154,11 @@ void init_game_board(void) {
 void seed_item(FieldType item_type)
 {
     int x = 0, y = 0; /* coordinates */
-    while(1)
-    {
+    while(1) {
         x = rand() % game_board_w;
         y = rand() % game_board_h;
-        if (game_board[game_board_w*y+x].type == Empty)
-        {
+        if (game_board[game_board_w*y+x].type == Empty) {
             game_board[game_board_w*y+x].type = item_type;
-
             /* render seeded wall to game board texture */
             if (item_type == Wall) {
                 SDL_Rect DstR = { x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE };
@@ -237,6 +234,34 @@ void render_screen(void)
                     break;
             }
         }
+    }
+
+    /* Extra elements dependent on current game state. */
+    /* TODO: Currently these are just placeholders - implement "real" messages and UI */
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    switch (game_state) {
+        case NotStarted:
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);
+            DstR.x = SCR_W/4;   DstR.y = SCR_H/4;
+            DstR.w = SCR_W/2;   DstR.h = SCR_H/2;
+            SDL_RenderFillRect(renderer, &DstR);
+            break;
+        case GameOver:
+            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 127);
+            DstR.x = 7*SCR_W/16;   DstR.y = 7*SCR_H/16;
+            DstR.w = SCR_W/8;   DstR.h = SCR_H/8;
+            SDL_RenderFillRect(renderer, &DstR);
+            break;
+        case Playing:
+            break;
+        case Paused:
+            SDL_SetRenderDrawColor(renderer, 0, 0, 255, 127);
+            DstR.x = 7*SCR_W/16;   DstR.y = 7*SCR_H/16;
+            DstR.w = SCR_W/8;   DstR.h = SCR_H/8;
+            SDL_RenderFillRect(renderer, &DstR);
+            break;
+        default:
+            break;
     }
     SDL_RenderPresent(renderer);
 }
@@ -345,6 +370,7 @@ void start_new_game(void) {
 
 void pause_game() {
     game_state = Paused;
+    render_screen(); /* PAUSE screen */
 }
 
 void resume_game() {
@@ -394,18 +420,17 @@ int main(int argc, char ** argv)
             case SDL_USEREVENT: /* game tick event */
                 if (game_state == Playing) {
                     frame = (frame+1) % CHAR_ANIM_FRAMES;
-                    if (frame % CHAR_ANIM_FRAMES) {
-                        render_screen(); /* animation frame without game state update */
-                    }
-                    else {
-                        if (progress_game()) {
-                            game_state = GameOver; /* GAME OVER, no need to render next frame */
+                    if (frame % CHAR_ANIM_FRAMES == 0) { /* updated game state frame */
+                        if (progress_game()) { /* update game state and check if game is over */
+                            game_state = GameOver; /* GAME OVER */
+                            frame = CHAR_ANIM_FRAMES; /* hack allowing to render final position correctly */
                         }
                         else { /* game continues */
-                            render_screen(); /* render next frame */
-                            ck_press = 0; /* allow new control key press */
+                            ck_press = 0; /* allow new direction key press */
                         }
                     }
+                    /* render each frame - both animations and "full" game state updates */
+                    render_screen();
                 }
                 break;
             case SDL_KEYDOWN:
