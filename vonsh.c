@@ -50,13 +50,14 @@ SDL_Surface *srf_char_tileset = NULL;
 SDL_Texture *txt_char_tileset = NULL;
 SDL_TimerID game_timer = 0;
 
-SDL_Rect ground_tile[GROUND_TILES];
-SDL_Rect wall_tile[WALL_TILES];
-SDL_Rect food_tile[FOOD_TILES];
+SDL_Rect *ground_tile = NULL;
+SDL_Rect *wall_tile = NULL;
+SDL_Rect *food_tile = NULL;
 BoardField *game_board = NULL;
 GameState game_state = NotStarted;
 
-const int game_board_w = SCR_W/TILE_SIZE, game_board_h = SCR_H/TILE_SIZE;
+int game_board_w = (SCR_W/TILE_SIZE); /* game board width(in full(16 pixels) tiles)*/
+int game_board_h = (SCR_H/TILE_SIZE-1); /* game board width(in full(16 pixels) tiles)*/
 int dhx=0, dhy=0;     /* head movement direction */
 int hx=0, hy=0;       /* head coordinates */
 int tx=0, ty=0;       /* tail coordinates */
@@ -64,6 +65,22 @@ int score=0;          /* player's score, number of food eaten */
 int expand_counter=0; /* counter of snake segments to add and walls to seed */
 int ck_press=0;       /* control key pressed indicator */
 int frame=0;          /* animation frame */
+
+
+int allocate_arrays(void) {
+    game_board = calloc(game_board_w*game_board_h, sizeof(BoardField));
+    ground_tile = calloc(GROUND_TILES, sizeof(SDL_Rect));
+    wall_tile = calloc(WALL_TILES, sizeof(SDL_Rect));
+    food_tile = calloc(FOOD_TILES, sizeof(SDL_Rect));
+    return 0;
+}
+
+void free_arrays(void) {
+    free(food_tile);
+    free(wall_tile);
+    free(ground_tile);
+    free(game_board);
+}
 
 void init_tiles(void) {
     ground_tile[0].x = 0;   ground_tile[0].y = 0;
@@ -100,11 +117,11 @@ void init_tiles(void) {
     }
 }
 
+/* Clears game board and fills the background texture with random grass pattern.
+   Executed at the start of the game.
+ */
 void init_game_board(void) {
-    /* allocate and initialize game board */
-    if (game_board == NULL) {
-        game_board = calloc(game_board_w*game_board_h, sizeof(BoardField));
-    }
+    /* clear the game board array */
     for (int i=0; i<game_board_w*game_board_h; i++) {
         game_board[i].type = Empty;
         game_board[i].ndx = 0;
@@ -115,12 +132,14 @@ void init_game_board(void) {
 
     /* Redirect rendering to the game board texture */
     SDL_SetRenderTarget(renderer, txt_game_board);
+    /* Fill render target with black. Later status bar at the bottom of the screen
+       will have that color. */
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 
     /* Fill background with random pattern of ground tiles */
     int x, y;
     SDL_Rect DstR = { 0, 0, TILE_SIZE, TILE_SIZE };
-    SDL_RenderClear(renderer);
     for (y=0; y<game_board_h; y++)
         for (x=0; x<game_board_w; x++) {
             DstR.x = x*TILE_SIZE; DstR.y = y*TILE_SIZE;
@@ -131,6 +150,7 @@ void init_game_board(void) {
     SDL_SetRenderTarget(renderer, NULL);
 }
 
+/* Adds obstacle or food at random location in game board and renders it to background texture. */
 void seed_item(FieldType item_type)
 {
     int x = 0, y = 0; /* coordinates */
@@ -160,9 +180,10 @@ void seed_item(FieldType item_type)
     }
 }
 
+/* renders whole game state and blits everything to screen */
 void render_screen(void)
 {
-    /* every screen refresh everything is rendered from scratch */
+    /* each frame everything is rendered from scratch */
     int x, y;
     int foff; /* game board field offset */
     SDL_Rect DstR = { 0, 0, TILE_SIZE, TILE_SIZE };
@@ -225,7 +246,7 @@ void render_screen(void)
     0 - game continues
     1 - game over
  */
-int update_game_state(void)
+int progress_game(void)
 {
     /* verify all kinds of collisions */
     if (hx+dhx < 0             || hy+dhy < 0 ||
@@ -288,6 +309,8 @@ int update_game_state(void)
     return 0;
 }
 
+/* Callback for frame timer.
+   Generates SDL_USEREVENT when main game loop shall render next frame. */
 uint32_t tick_callback(uint32_t interval, void *param)
 {
     SDL_Event event;
@@ -305,7 +328,7 @@ void start_new_game(void) {
 
     score = expand_counter = 0;
     dhx = 0;   dhy = -1;
-    hx = tx = SCR_W/(TILE_SIZE*2);   hy = ty = SCR_H/(TILE_SIZE*2);
+    hx = tx = game_board_w/2;   hy = ty = game_board_h/2;
     game_board[game_board_w*hy+hx].type = Snake;
     game_board[game_board_w*hy+hx].p = rand()%TOTAL_CHAR;
     game_board[game_board_w*hy+hx].ndx = dhx;
@@ -318,20 +341,15 @@ void start_new_game(void) {
     game_state = Playing;
 
     render_screen();
-    /* init timer and trigger rendering of first frame */
-    game_timer = SDL_AddTimer(GAME_SPEED/CHAR_ANIM_FRAMES, tick_callback, 0);
 }
 
 void pause_game() {
     game_state = Paused;
-    SDL_RemoveTimer(game_timer);
 }
 
 void resume_game() {
     ck_press = 0;
     game_state = Playing;
-    /* TODO: create timer only once - when program is run. Do not delete it afterwards, only reuse. */
-    game_timer = SDL_AddTimer(GAME_SPEED/CHAR_ANIM_FRAMES, tick_callback, 0);
 }
 
 int main(int argc, char ** argv)
@@ -356,15 +374,18 @@ int main(int argc, char ** argv)
     srf_char_tileset = IMG_Load("resources/character_tiles.png");
     txt_char_tileset = SDL_CreateTextureFromSurface(renderer, srf_char_tileset);
 
+    allocate_arrays();
+
     /* initialize environment tileset info */
     init_tiles();
 
-    init_game_board();
-
+    /* Draw splash screen. */
     game_state = NotStarted;
-
+    init_game_board();
     render_screen();
 
+    /* Start frame timer. */
+    game_timer = SDL_AddTimer(GAME_SPEED/CHAR_ANIM_FRAMES, tick_callback, 0);
     while (!quit)
     {
         SDL_WaitEvent(&event);
@@ -377,8 +398,7 @@ int main(int argc, char ** argv)
                         render_screen(); /* animation frame without game state update */
                     }
                     else {
-                        if (update_game_state()) {
-                            SDL_RemoveTimer(game_timer);
+                        if (progress_game()) {
                             game_state = GameOver; /* GAME OVER, no need to render next frame */
                         }
                         else { /* game continues */
@@ -442,7 +462,7 @@ int main(int argc, char ** argv)
     IMG_Quit();
     SDL_Quit();
 
-    free(game_board);
+    free_arrays();
 
     return 0;
 }
