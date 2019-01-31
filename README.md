@@ -16,6 +16,7 @@ Use arrow keys to move snake. Eat food, avoid obstacles and screen edges.
 + Beast https://opengameart.org/content/overworld-grass-biome
 + Henry Software https://henrysoftware.itch.io/pixel-food
 + Fleurman https://opengameart.org/content/tiny-characters-set
++ Good Neighbors font by Clint Bellanger
 
 ## License
 MIT License

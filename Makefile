@@ -1,5 +1,5 @@
 PROGRAM = vonsh
-OBJS = vonsh.o
+OBJS = vonsh.o text_renderer.o
 CC = gcc
 CFLAGS = -Wall -O3
 LDFLAGS = -lSDL2 -lSDL2main -lSDL2_image

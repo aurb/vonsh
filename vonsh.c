@@ -1,11 +1,6 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
-
-typedef enum e_TextAlignment {
-    Left,
-    Center,
-    Right
-} TextAlignment;
+#include "text_renderer.h"
 
 typedef enum e_GameState {
     NotStarted,
@@ -48,6 +43,8 @@ SDL_Surface *srf_food_tileset = NULL;
 SDL_Texture *txt_food_tileset = NULL;
 SDL_Surface *srf_char_tileset = NULL;
 SDL_Texture *txt_char_tileset = NULL;
+SDL_Surface *srf_font = NULL;
+SDL_Texture *txt_font = NULL;
 SDL_TimerID game_timer = 0;
 
 SDL_Rect *ground_tile = NULL;
@@ -242,23 +239,22 @@ void render_screen(void)
     switch (game_state) {
         case NotStarted:
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);
-            DstR.x = SCR_W/4;   DstR.y = SCR_H/4;
-            DstR.w = SCR_W/2;   DstR.h = SCR_H/2;
+            DstR.x = 3*SCR_W/8;   DstR.y = 3*(SCR_H-TILE_SIZE)/8;
+            DstR.w = SCR_W/4;   DstR.h = (SCR_H-TILE_SIZE)/4;
             SDL_RenderFillRect(renderer, &DstR);
+            render_text(SCR_W/2, SCR_H/2-TILE_SIZE, Center, "Vonsh");
             break;
         case GameOver:
-            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 127);
-            DstR.x = 7*SCR_W/16;   DstR.y = 7*SCR_H/16;
-            DstR.w = SCR_W/8;   DstR.h = SCR_H/8;
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);
+            DstR.x = 3*SCR_W/8;   DstR.y = 3*(SCR_H-TILE_SIZE)/8;
+            DstR.w = SCR_W/4;   DstR.h = (SCR_H-TILE_SIZE)/4;
             SDL_RenderFillRect(renderer, &DstR);
+            render_text(SCR_W/2, SCR_H/2-TILE_SIZE, Center, "Game Over");
             break;
         case Playing:
             break;
         case Paused:
-            SDL_SetRenderDrawColor(renderer, 0, 0, 255, 127);
-            DstR.x = 7*SCR_W/16;   DstR.y = 7*SCR_H/16;
-            DstR.w = SCR_W/8;   DstR.h = SCR_H/8;
-            SDL_RenderFillRect(renderer, &DstR);
+            render_text(SCR_W/2, SCR_H/2-TILE_SIZE, Center, "Pause");
             break;
         default:
             break;
@@ -399,8 +395,12 @@ int main(int argc, char ** argv)
     txt_food_tileset = SDL_CreateTextureFromSurface(renderer, srf_food_tileset);
     srf_char_tileset = IMG_Load("resources/character_tiles.png");
     txt_char_tileset = SDL_CreateTextureFromSurface(renderer, srf_char_tileset);
+    srf_font = IMG_Load("resources/good_neighbors.png");
+    txt_font = SDL_CreateTextureFromSurface(renderer, srf_font);
 
     allocate_arrays();
+
+    init_text_renderer(renderer, txt_font);
 
     /* initialize environment tileset info */
     init_tiles();
@@ -473,11 +473,13 @@ int main(int argc, char ** argv)
 
     SDL_RemoveTimer(game_timer);
 
+    SDL_DestroyTexture(txt_font);
     SDL_DestroyTexture(txt_char_tileset);
     SDL_DestroyTexture(txt_env_tileset);
     SDL_DestroyTexture(txt_food_tileset);
     SDL_DestroyTexture(txt_game_board);
 
+    SDL_FreeSurface(srf_font);
     SDL_FreeSurface(srf_char_tileset);
     SDL_FreeSurface(srf_env_tileset);
     SDL_FreeSurface(srf_food_tileset);
