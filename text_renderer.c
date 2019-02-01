@@ -23,7 +23,7 @@ int render_text(int x, int y, TextAlignment align, char *text) {
     DstR.y = y;
     SrcR.h = DstR.h = font_h;
 
-    /* calculate text width */
+    /* calculate text width, needed for correct Right and Center alignments */
     text_p = text;
     while(*text_p) {
         if (*text_p != ' ') {
@@ -31,7 +31,7 @@ int render_text(int x, int y, TextAlignment align, char *text) {
             text_w += font_layout[i+1] - font_layout[i];
         }
         else {
-            text_w += font_h/2; /* substitute for space */
+            text_w += font_h/3; /* substitute for space */
         }
         text_p++;
     }

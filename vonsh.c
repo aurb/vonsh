@@ -59,6 +59,7 @@ int dhx=0, dhy=0;     /* head movement direction */
 int hx=0, hy=0;       /* head coordinates */
 int tx=0, ty=0;       /* tail coordinates */
 int score=0;          /* player's score, number of food eaten */
+int hi_score=0;       /* highest score from previous gameplays */
 int expand_counter=0; /* counter of snake segments to add and walls to seed */
 int ck_press=0;       /* control key pressed indicator */
 int frame=0;          /* animation frame */
@@ -182,6 +183,7 @@ void render_screen(void)
     int foff; /* game board field offset */
     SDL_Rect DstR = { 0, 0, TILE_SIZE, TILE_SIZE };
     SDL_Rect SrcR = { 0, 0, TILE_SIZE, TILE_SIZE };
+    char score_string[15];
     /* render game backround with walls */
     SDL_RenderCopy(renderer, txt_game_board, NULL, NULL);
 
@@ -239,17 +241,25 @@ void render_screen(void)
     switch (game_state) {
         case NotStarted:
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);
-            DstR.x = 3*SCR_W/8;   DstR.y = 3*(SCR_H-TILE_SIZE)/8;
-            DstR.w = SCR_W/4;   DstR.h = (SCR_H-TILE_SIZE)/4;
+            DstR.w = SCR_W/4;          DstR.h = 8*TILE_SIZE;
+            DstR.x = (SCR_W-DstR.w)/2; DstR.y = (SCR_H-TILE_SIZE-DstR.h)/2;
             SDL_RenderFillRect(renderer, &DstR);
-            render_text(SCR_W/2, SCR_H/2-TILE_SIZE, Center, "Vonsh");
+            render_text(SCR_W/2,    SCR_H/2-3.5*TILE_SIZE, Center, "Vonsh");
+            render_text(SCR_W/2-32, SCR_H/2-2*TILE_SIZE,   Right, "Arrows:");
+            render_text(SCR_W/2-32, SCR_H/2-2*TILE_SIZE,   Left, " snake control");
+            render_text(SCR_W/2-32, SCR_H/2-TILE_SIZE,     Right, "SPACE:");
+            render_text(SCR_W/2-32, SCR_H/2-TILE_SIZE,     Left, " Pause/Resume");
+            render_text(SCR_W/2-32, SCR_H/2,               Right, "ESC:");
+            render_text(SCR_W/2-32, SCR_H/2,               Left, " Quit");
+            render_text(SCR_W/2,    SCR_H/2+1.5*TILE_SIZE, Center, "Press SPACE to play");
             break;
         case GameOver:
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);
-            DstR.x = 3*SCR_W/8;   DstR.y = 3*(SCR_H-TILE_SIZE)/8;
-            DstR.w = SCR_W/4;   DstR.h = (SCR_H-TILE_SIZE)/4;
+            DstR.w = SCR_W/4;          DstR.h = 4*TILE_SIZE;
+            DstR.x = (SCR_W-DstR.w)/2; DstR.y = (SCR_H-TILE_SIZE-DstR.h)/2;
             SDL_RenderFillRect(renderer, &DstR);
-            render_text(SCR_W/2, SCR_H/2-TILE_SIZE, Center, "Game Over");
+            render_text(SCR_W/2, SCR_H/2-1.5*TILE_SIZE, Center, "Game Over");
+            render_text(SCR_W/2, SCR_H/2-0.25*TILE_SIZE, Center, "Press SPACE to play again");
             break;
         case Playing:
             break;
@@ -259,6 +269,11 @@ void render_screen(void)
         default:
             break;
     }
+    /* print score and hi score */
+    sprintf(score_string, "SCORE: %d", score);
+    render_text(TILE_SIZE, SCR_H-TILE_SIZE, Left, score_string);
+    sprintf(score_string, "HI SCORE: %d", hi_score);
+    render_text(SCR_W-TILE_SIZE, SCR_H-TILE_SIZE, Right, score_string);
     SDL_RenderPresent(renderer);
 }
 
@@ -278,6 +293,7 @@ int progress_game(void)
     else if (game_board[game_board_w*(hy+dhy)+hx+dhx].type == Food) {
         /* food hit - increase score, start expanding snake, seed new food */
         score++;
+        hi_score = score > hi_score ? score : hi_score;
         expand_counter += score;
         seed_item(Food);
     }
@@ -407,6 +423,7 @@ int main(int argc, char ** argv)
 
     /* Draw splash screen. */
     game_state = NotStarted;
+    hi_score = 0;
     init_game_board();
     render_screen();
 
