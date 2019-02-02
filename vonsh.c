@@ -3,6 +3,7 @@
 #include "text_renderer.h"
 
 typedef enum e_GameState {
+    NotInitialized,
     NotStarted,
     Playing,
     Paused,
@@ -25,8 +26,6 @@ typedef struct BoardField {
     int pdy; /* delta y to previous piece of snake. */
 } BoardField;
 
-#define SCR_W 1024
-#define SCR_H 768
 #define TILE_SIZE 16
 #define GAME_SPEED 200
 #define GROUND_TILES 8
@@ -53,8 +52,9 @@ SDL_Rect *food_tile = NULL;
 BoardField *game_board = NULL;
 GameState game_state = NotStarted;
 
-int game_board_w = (SCR_W/TILE_SIZE); /* game board width(in full(16 pixels) tiles)*/
-int game_board_h = (SCR_H/TILE_SIZE-1); /* game board width(in full(16 pixels) tiles)*/
+int game_board_w = (1024/TILE_SIZE); /* game board width(in full(16 pixels) tiles)*/
+int game_board_h = (768/TILE_SIZE-1); /* game board width(in full(16 pixels) tiles)*/
+int screen_w = 0, screen_h = 0; /* game window width and height */
 int dhx=0, dhy=0;     /* head movement direction */
 int hx=0, hy=0;       /* head coordinates */
 int tx=0, ty=0;       /* tail coordinates */
@@ -64,15 +64,20 @@ int expand_counter=0; /* counter of snake segments to add and walls to seed */
 int ck_press=0;       /* control key pressed indicator */
 int frame=0;          /* animation frame */
 
-
-int allocate_arrays(void) {
-    game_board = calloc(game_board_w*game_board_h, sizeof(BoardField));
-    ground_tile = calloc(GROUND_TILES, sizeof(SDL_Rect));
-    wall_tile = calloc(WALL_TILES, sizeof(SDL_Rect));
-    food_tile = calloc(FOOD_TILES, sizeof(SDL_Rect));
-    return 0;
+/* Callback for frame timer.
+   Generates SDL_USEREVENT when main game loop shall render next frame. */
+uint32_t tick_callback(uint32_t interval, void *param) {
+    SDL_Event event;
+    SDL_UserEvent userevent;
+    userevent.type = SDL_USEREVENT;  userevent.code = 0;
+    userevent.data1 = NULL;  userevent.data2 = NULL;
+    event.type = SDL_USEREVENT;  event.user = userevent;
+    SDL_PushEvent(&event);
+    return interval;
 }
 
+/********** GAME / PLAY INITIALIZATION FUNCTIONS ************/
+/* executed at the exit from game */
 void free_arrays(void) {
     free(food_tile);
     free(wall_tile);
@@ -80,46 +85,11 @@ void free_arrays(void) {
     free(game_board);
 }
 
-void init_tiles(void) {
-    ground_tile[0].x = 0;   ground_tile[0].y = 0;
-    ground_tile[1].x = 1;   ground_tile[1].y = 0;
-    ground_tile[2].x = 2;   ground_tile[2].y = 0;
-    ground_tile[3].x = 3;   ground_tile[3].y = 0;
-    ground_tile[4].x = 4;   ground_tile[4].y = 0;
-    ground_tile[5].x = 0;   ground_tile[5].y = 1;
-    ground_tile[6].x = 0;   ground_tile[6].y = 2;
-    ground_tile[7].x = 0;   ground_tile[7].y = 3;
-    for (int i=0; i<GROUND_TILES; i++) {
-        ground_tile[i].x *= TILE_SIZE;   ground_tile[i].y *= TILE_SIZE;
-        ground_tile[i].w = ground_tile[i].h = TILE_SIZE;
-    }
-
-    wall_tile[0].x = 0;  wall_tile[0].y = 17;
-    wall_tile[1].x = 1;  wall_tile[1].y = 17;
-    wall_tile[2].x = 2;  wall_tile[2].y = 17;
-    wall_tile[3].x = 3;  wall_tile[3].y = 17;
-    for (int i=0; i<WALL_TILES; i++) {
-        wall_tile[i].x *= TILE_SIZE;   wall_tile[i].y *= TILE_SIZE;
-        wall_tile[i].w = wall_tile[i].h = TILE_SIZE;
-    }
-
-    food_tile[0].x = 4;  food_tile[0].y = 1;
-    food_tile[1].x = 0;  food_tile[1].y = 4;
-    food_tile[2].x = 1;  food_tile[2].y = 4;
-    food_tile[3].x = 2;  food_tile[3].y = 4;
-    food_tile[4].x = 0;  food_tile[4].y = 6;
-    food_tile[5].x = 3;  food_tile[5].y = 6;
-    for (int i=0; i<FOOD_TILES; i++) {
-        food_tile[i].x *= TILE_SIZE;   food_tile[i].y *= TILE_SIZE;
-        food_tile[i].w = food_tile[i].h = TILE_SIZE;
-    }
-}
-
 /* Clears game board and fills the background texture with random grass pattern.
-   Executed at the start of the game.
+   Executed at start of the game and at start of play.
  */
 void init_game_board(void) {
-    /* clear the game board array */
+    /* Reset the game board array */
     for (int i=0; i<game_board_w*game_board_h; i++) {
         game_board[i].type = Empty;
         game_board[i].ndx = 0;
@@ -128,6 +98,8 @@ void init_game_board(void) {
         game_board[i].pdy = 0;
     }
 
+    /* Prepare uniform texture with background(grass + walls) - used for speeding up
+       rendering of gameplay frames */
     /* Redirect rendering to the game board texture */
     SDL_SetRenderTarget(renderer, txt_game_board);
     /* Fill render target with black. Later status bar at the bottom of the screen
@@ -148,6 +120,96 @@ void init_game_board(void) {
     SDL_SetRenderTarget(renderer, NULL);
 }
 
+
+void init_game(int gbw, int gbh) {
+    /* game board dimensions(in full tiles) */
+    game_board_w = gbw;
+    game_board_h = gbh;
+    /* game screen dimensions */
+    screen_w = game_board_w*TILE_SIZE;
+    /* bottom TILE_SIZE pixels is used for displaying score*/
+    screen_h = (game_board_h+1)*TILE_SIZE;
+
+    /* Executed only at start of program */
+    if (game_state == NotInitialized) {
+        /* init SDL library */
+        SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER);
+        IMG_Init(IMG_INIT_PNG);
+    }
+
+    /* TODO: Adjust below paragraph to support in-game screen resolution changes */
+    screen = SDL_CreateWindow("Vonsh", SDL_WINDOWPOS_CENTERED,
+                 SDL_WINDOWPOS_CENTERED, screen_w, screen_h, 0);
+    renderer = SDL_CreateRenderer(screen, -1,
+                   SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE);
+    /* texture for rendering game background with obstacles */
+    txt_game_board = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+                        SDL_TEXTUREACCESS_TARGET, screen_w, screen_h);
+    if (game_board != NULL) {
+        free(game_board);
+    }
+    game_board = calloc(game_board_w*game_board_h, sizeof(BoardField));
+
+    /* Executed only at start of program */
+    if (game_state == NotInitialized) {
+        /* load textures */
+        srf_env_tileset = IMG_Load("resources/board_tiles.png");
+        txt_env_tileset = SDL_CreateTextureFromSurface(renderer, srf_env_tileset);
+        srf_food_tileset = IMG_Load("resources/food_tiles.png");
+        txt_food_tileset = SDL_CreateTextureFromSurface(renderer, srf_food_tileset);
+        srf_char_tileset = IMG_Load("resources/character_tiles.png");
+        txt_char_tileset = SDL_CreateTextureFromSurface(renderer, srf_char_tileset);
+        srf_font = IMG_Load("resources/good_neighbors.png");
+        txt_font = SDL_CreateTextureFromSurface(renderer, srf_font);
+        /* allocate tile info arrays */
+        ground_tile = calloc(GROUND_TILES, sizeof(SDL_Rect));
+        wall_tile = calloc(WALL_TILES, sizeof(SDL_Rect));
+        food_tile = calloc(FOOD_TILES, sizeof(SDL_Rect));
+        /* fill tile info arrays */
+        ground_tile[0].x = 0;   ground_tile[0].y = 0;
+        ground_tile[1].x = 1;   ground_tile[1].y = 0;
+        ground_tile[2].x = 2;   ground_tile[2].y = 0;
+        ground_tile[3].x = 3;   ground_tile[3].y = 0;
+        ground_tile[4].x = 4;   ground_tile[4].y = 0;
+        ground_tile[5].x = 0;   ground_tile[5].y = 1;
+        ground_tile[6].x = 0;   ground_tile[6].y = 2;
+        ground_tile[7].x = 0;   ground_tile[7].y = 3;
+        for (int i=0; i<GROUND_TILES; i++) {
+            ground_tile[i].x *= TILE_SIZE;   ground_tile[i].y *= TILE_SIZE;
+            ground_tile[i].w = ground_tile[i].h = TILE_SIZE;
+        }
+        wall_tile[0].x = 0;  wall_tile[0].y = 17;
+        wall_tile[1].x = 1;  wall_tile[1].y = 17;
+        wall_tile[2].x = 2;  wall_tile[2].y = 17;
+        wall_tile[3].x = 3;  wall_tile[3].y = 17;
+        for (int i=0; i<WALL_TILES; i++) {
+            wall_tile[i].x *= TILE_SIZE;   wall_tile[i].y *= TILE_SIZE;
+            wall_tile[i].w = wall_tile[i].h = TILE_SIZE;
+        }
+        food_tile[0].x = 4;  food_tile[0].y = 1;
+        food_tile[1].x = 0;  food_tile[1].y = 4;
+        food_tile[2].x = 1;  food_tile[2].y = 4;
+        food_tile[3].x = 2;  food_tile[3].y = 4;
+        food_tile[4].x = 0;  food_tile[4].y = 6;
+        food_tile[5].x = 3;  food_tile[5].y = 6;
+        for (int i=0; i<FOOD_TILES; i++) {
+            food_tile[i].x *= TILE_SIZE;   food_tile[i].y *= TILE_SIZE;
+            food_tile[i].w = food_tile[i].h = TILE_SIZE;
+        }
+    }
+
+    /* init text rendering functionality */
+    init_text_renderer(renderer, txt_font);
+    /* Reset game board and generate new background texture. */
+    init_game_board();
+    /* Start frame timer. */
+    game_timer = SDL_AddTimer(GAME_SPEED/CHAR_ANIM_FRAMES, tick_callback, 0);
+    game_state = NotStarted;
+    hi_score = 0;
+}
+
+
+/************ PLAY FUNCTIONS *************/
 /* Adds obstacle or food at random location in game board and renders it to background texture. */
 void seed_item(FieldType item_type)
 {
@@ -188,10 +250,14 @@ void render_screen(void)
     SDL_RenderCopy(renderer, txt_game_board, NULL, NULL);
 
     /* render snake body and food*/
+    foff = 0; /* offset to game board field */
     for (y=0; y<game_board_h; y++) {
         for (x=0; x<game_board_w; x++) {
-            foff = game_board_w*y+x;
             switch(game_board[foff].type) {
+                case Empty:
+                case Wall:
+                    /* empty fields and obstacles were already copied from txt_game_board */
+                    break;
                 case Snake:
                     /* select direction of character based on snake piece direction */
                     if (-game_board[foff].pdx == 0 && -game_board[foff].pdy == 1) {
@@ -232,48 +298,49 @@ void render_screen(void)
                 default:
                     break;
             }
+            foff++; /* next game board field */
         }
     }
 
     /* Extra elements dependent on current game state. */
-    /* TODO: Currently these are just placeholders - implement "real" messages and UI */
+    /* TODO: Currently these are placeholders - implement final UI */
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     switch (game_state) {
         case NotStarted:
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);
-            DstR.w = SCR_W/4;          DstR.h = 8*TILE_SIZE;
-            DstR.x = (SCR_W-DstR.w)/2; DstR.y = (SCR_H-TILE_SIZE-DstR.h)/2;
+            DstR.w = screen_w/4;          DstR.h = 8*TILE_SIZE;
+            DstR.x = (screen_w-DstR.w)/2; DstR.y = (screen_h-TILE_SIZE-DstR.h)/2;
             SDL_RenderFillRect(renderer, &DstR);
-            render_text(SCR_W/2,    SCR_H/2-3.5*TILE_SIZE, Center, "Vonsh");
-            render_text(SCR_W/2-32, SCR_H/2-2*TILE_SIZE,   Right, "Arrows:");
-            render_text(SCR_W/2-32, SCR_H/2-2*TILE_SIZE,   Left, " snake control");
-            render_text(SCR_W/2-32, SCR_H/2-TILE_SIZE,     Right, "SPACE:");
-            render_text(SCR_W/2-32, SCR_H/2-TILE_SIZE,     Left, " Pause/Resume");
-            render_text(SCR_W/2-32, SCR_H/2,               Right, "ESC:");
-            render_text(SCR_W/2-32, SCR_H/2,               Left, " Quit");
-            render_text(SCR_W/2,    SCR_H/2+1.5*TILE_SIZE, Center, "Press SPACE to play");
+            render_text(screen_w/2,    screen_h/2-3.5*TILE_SIZE, Center, "Vonsh");
+            render_text(screen_w/2-32, screen_h/2-2*TILE_SIZE,   Right, "Arrows:");
+            render_text(screen_w/2-32, screen_h/2-2*TILE_SIZE,   Left, " snake control");
+            render_text(screen_w/2-32, screen_h/2-TILE_SIZE,     Right, "SPACE:");
+            render_text(screen_w/2-32, screen_h/2-TILE_SIZE,     Left, " Pause/Resume");
+            render_text(screen_w/2-32, screen_h/2,               Right, "ESC:");
+            render_text(screen_w/2-32, screen_h/2,               Left, " Quit");
+            render_text(screen_w/2,    screen_h/2+1.5*TILE_SIZE, Center, "Press SPACE to play");
             break;
         case GameOver:
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);
-            DstR.w = SCR_W/4;          DstR.h = 4*TILE_SIZE;
-            DstR.x = (SCR_W-DstR.w)/2; DstR.y = (SCR_H-TILE_SIZE-DstR.h)/2;
+            DstR.w = screen_w/4;          DstR.h = 4*TILE_SIZE;
+            DstR.x = (screen_w-DstR.w)/2; DstR.y = (screen_h-TILE_SIZE-DstR.h)/2;
             SDL_RenderFillRect(renderer, &DstR);
-            render_text(SCR_W/2, SCR_H/2-1.5*TILE_SIZE, Center, "Game Over");
-            render_text(SCR_W/2, SCR_H/2-0.25*TILE_SIZE, Center, "Press SPACE to play again");
+            render_text(screen_w/2, screen_h/2-1.5*TILE_SIZE, Center, "Game Over");
+            render_text(screen_w/2, screen_h/2-0.25*TILE_SIZE, Center, "Press SPACE to play again");
             break;
         case Playing:
             break;
         case Paused:
-            render_text(SCR_W/2, SCR_H/2-TILE_SIZE, Center, "Pause");
+            render_text(screen_w/2, screen_h/2-TILE_SIZE, Center, "Pause");
             break;
         default:
             break;
     }
     /* print score and hi score */
     sprintf(score_string, "SCORE: %d", score);
-    render_text(TILE_SIZE, SCR_H-TILE_SIZE, Left, score_string);
+    render_text(TILE_SIZE, screen_h-TILE_SIZE, Left, score_string);
     sprintf(score_string, "HI SCORE: %d", hi_score);
-    render_text(SCR_W-TILE_SIZE, SCR_H-TILE_SIZE, Right, score_string);
+    render_text(screen_w-TILE_SIZE, screen_h-TILE_SIZE, Right, score_string);
     SDL_RenderPresent(renderer);
 }
 
@@ -282,7 +349,7 @@ void render_screen(void)
     0 - game continues
     1 - game over
  */
-int progress_game(void)
+int update_play_state(void)
 {
     /* verify all kinds of collisions */
     if (hx+dhx < 0             || hy+dhy < 0 ||
@@ -346,26 +413,15 @@ int progress_game(void)
     return 0;
 }
 
-/* Callback for frame timer.
-   Generates SDL_USEREVENT when main game loop shall render next frame. */
-uint32_t tick_callback(uint32_t interval, void *param)
-{
-    SDL_Event event;
-    SDL_UserEvent userevent;
-    userevent.type = SDL_USEREVENT;  userevent.code = 0;
-    userevent.data1 = NULL;  userevent.data2 = NULL;
-    event.type = SDL_USEREVENT;  event.user = userevent;
-    SDL_PushEvent(&event);
-    return interval;
-}
-
-void start_new_game(void) {
-    /* initialize movement direction and position */
+void start_play(void) {
+    /* Reset game board and generate new background texture. */
     init_game_board();
 
-    score = expand_counter = 0;
+    /* initialize movement direction and position */
     dhx = 0;   dhy = -1;
+    score = expand_counter = 0;
     hx = tx = game_board_w/2;   hy = ty = game_board_h/2;
+    /* seed first piece of snake */
     game_board[game_board_w*hy+hx].type = Snake;
     game_board[game_board_w*hy+hx].p = rand()%TOTAL_CHAR;
     game_board[game_board_w*hy+hx].ndx = dhx;
@@ -380,55 +436,29 @@ void start_new_game(void) {
     render_screen();
 }
 
-void pause_game() {
+void pause_play() {
     game_state = Paused;
     render_screen(); /* PAUSE screen */
 }
 
-void resume_game() {
+void resume_play() {
     ck_press = 0;
     game_state = Playing;
 }
+
+
+/*############ MAIN GAME LOOP #############*/
 
 int main(int argc, char ** argv)
 {
     int quit = 0;
     SDL_Event event;
 
-    /* init SDL library and load game resources */
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER);
-    IMG_Init(IMG_INIT_PNG);
-    screen = SDL_CreateWindow("Vonsh", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCR_W, SCR_H, 0);
-    renderer = SDL_CreateRenderer(screen, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE);
+    /* basic game configuration */
+    game_state = NotInitialized;
+    init_game(1024/TILE_SIZE, 768/TILE_SIZE-1);
 
-    /* texture for rendering game background with obstacles */
-    txt_game_board = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, SCR_W, SCR_H);
-
-    /* textures with game assets */
-    srf_env_tileset = IMG_Load("resources/board_tiles.png");
-    txt_env_tileset = SDL_CreateTextureFromSurface(renderer, srf_env_tileset);
-    srf_food_tileset = IMG_Load("resources/food_tiles.png");
-    txt_food_tileset = SDL_CreateTextureFromSurface(renderer, srf_food_tileset);
-    srf_char_tileset = IMG_Load("resources/character_tiles.png");
-    txt_char_tileset = SDL_CreateTextureFromSurface(renderer, srf_char_tileset);
-    srf_font = IMG_Load("resources/good_neighbors.png");
-    txt_font = SDL_CreateTextureFromSurface(renderer, srf_font);
-
-    allocate_arrays();
-
-    init_text_renderer(renderer, txt_font);
-
-    /* initialize environment tileset info */
-    init_tiles();
-
-    /* Draw splash screen. */
-    game_state = NotStarted;
-    hi_score = 0;
-    init_game_board();
     render_screen();
-
-    /* Start frame timer. */
-    game_timer = SDL_AddTimer(GAME_SPEED/CHAR_ANIM_FRAMES, tick_callback, 0);
     while (!quit)
     {
         SDL_WaitEvent(&event);
@@ -438,11 +468,11 @@ int main(int argc, char ** argv)
                 if (game_state == Playing) {
                     frame = (frame+1) % CHAR_ANIM_FRAMES;
                     if (frame % CHAR_ANIM_FRAMES == 0) { /* updated game state frame */
-                        if (progress_game()) { /* update game state and check if game is over */
+                        if (update_play_state()) { /* update play state and check if game is over */
                             game_state = GameOver; /* GAME OVER */
                             frame = CHAR_ANIM_FRAMES; /* hack allowing to render final position correctly */
                         }
-                        else { /* game continues */
+                        else { /* play continues */
                             ck_press = 0; /* allow new direction key press */
                         }
                     }
@@ -458,16 +488,16 @@ int main(int argc, char ** argv)
                     switch (game_state) {
                         case NotStarted:
                         case GameOver:
-                            /* start new game */
-                            start_new_game();
+                            /* start new play */
+                            start_play();
                             break;
                         case Playing:
-                            /* pause game */
-                            pause_game();
+                            /* pause play */
+                            pause_play();
                             break;
                         case Paused:
-                            /* resume game */
-                            resume_game();
+                            /* resume play */
+                            resume_play();
                             break;
                         default:
                             break;
