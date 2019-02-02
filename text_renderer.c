@@ -13,6 +13,10 @@ void init_text_renderer(SDL_Renderer* renderer, SDL_Texture* texture) {
     SDL_QueryTexture(font_texture, NULL, NULL, NULL, &font_h);
 }
 
+void set_text_color(uint8_t r, uint8_t g, uint8_t b) {
+    SDL_SetTextureColorMod(font_texture, r, g, b);
+}
+
 int render_text(int x, int y, TextAlignment align, char *text) {
     int i; /* index of letter font layout table */
     char *text_p = NULL;

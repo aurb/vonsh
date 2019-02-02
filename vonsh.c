@@ -304,39 +304,49 @@ void render_screen(void)
 
     /* Extra elements dependent on current game state. */
     /* TODO: Currently these are placeholders - implement final UI */
+#define SET_WHITE_TEXT set_text_color(255, 255, 255)
+#define SET_GREY_TEXT set_text_color(192, 192, 192)
+#define SET_YELLOW_TEXT set_text_color(224, 192, 32)
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     switch (game_state) {
         case NotStarted:
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);
-            DstR.w = screen_w/4;          DstR.h = 8*TILE_SIZE;
+            DstR.w = 16*TILE_SIZE;        DstR.h = 8*TILE_SIZE;
             DstR.x = (screen_w-DstR.w)/2; DstR.y = (screen_h-TILE_SIZE-DstR.h)/2;
             SDL_RenderFillRect(renderer, &DstR);
+            SET_WHITE_TEXT;
             render_text(screen_w/2,    screen_h/2-3.5*TILE_SIZE, Center, "Vonsh");
+            SET_YELLOW_TEXT;
             render_text(screen_w/2-32, screen_h/2-2*TILE_SIZE,   Right, "Arrows:");
-            render_text(screen_w/2-32, screen_h/2-2*TILE_SIZE,   Left, " snake control");
             render_text(screen_w/2-32, screen_h/2-TILE_SIZE,     Right, "SPACE:");
-            render_text(screen_w/2-32, screen_h/2-TILE_SIZE,     Left, " Pause/Resume");
             render_text(screen_w/2-32, screen_h/2,               Right, "ESC:");
+            SET_GREY_TEXT;
+            render_text(screen_w/2-32, screen_h/2-2*TILE_SIZE,   Left, " snake control");
+            render_text(screen_w/2-32, screen_h/2-TILE_SIZE,     Left, " Pause/Resume");
             render_text(screen_w/2-32, screen_h/2,               Left, " Quit");
             render_text(screen_w/2,    screen_h/2+1.5*TILE_SIZE, Center, "Press SPACE to play");
             break;
         case GameOver:
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);
-            DstR.w = screen_w/4;          DstR.h = 4*TILE_SIZE;
+            DstR.w = 16*TILE_SIZE;        DstR.h = 4*TILE_SIZE;
             DstR.x = (screen_w-DstR.w)/2; DstR.y = (screen_h-TILE_SIZE-DstR.h)/2;
             SDL_RenderFillRect(renderer, &DstR);
+            SET_WHITE_TEXT;
             render_text(screen_w/2, screen_h/2-1.5*TILE_SIZE, Center, "Game Over");
+            SET_GREY_TEXT;
             render_text(screen_w/2, screen_h/2-0.25*TILE_SIZE, Center, "Press SPACE to play again");
             break;
         case Playing:
             break;
         case Paused:
+            SET_WHITE_TEXT;
             render_text(screen_w/2, screen_h/2-TILE_SIZE, Center, "Pause");
             break;
         default:
             break;
     }
     /* print score and hi score */
+    SET_WHITE_TEXT;
     sprintf(score_string, "SCORE: %d", score);
     render_text(TILE_SIZE, screen_h-TILE_SIZE, Left, score_string);
     sprintf(score_string, "HI SCORE: %d", hi_score);
