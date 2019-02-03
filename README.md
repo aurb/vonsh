@@ -17,6 +17,8 @@ Use arrow keys to move snake. Eat food, avoid obstacles and screen edges.
 + Henry Software https://henrysoftware.itch.io/pixel-food
 + Fleurman https://opengameart.org/content/tiny-characters-set
 + Good Neighbors font by Clint Bellanger
++ Bronze Trophy by Yevhen Danchenko
++ Logo by Andrzej Urbaniak
 
 ## License
 MIT License

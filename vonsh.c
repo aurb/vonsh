@@ -44,6 +44,10 @@ SDL_Surface *srf_char_tileset = NULL;
 SDL_Texture *txt_char_tileset = NULL;
 SDL_Surface *srf_font = NULL;
 SDL_Texture *txt_font = NULL;
+SDL_Surface *srf_logo = NULL;
+SDL_Texture *txt_logo = NULL;
+SDL_Surface *srf_trophy = NULL;
+SDL_Texture *txt_trophy = NULL;
 SDL_TimerID game_timer = 0;
 
 SDL_Rect *ground_tile = NULL;
@@ -59,6 +63,7 @@ int hx=0, hy=0;       /* head coordinates */
 int tx=0, ty=0;       /* tail coordinates */
 int score=0;          /* player's score, number of food eaten */
 int hi_score=0;       /* highest score from previous gameplays */
+int new_record=0;     /* flag set if user beats previous record */
 int expand_counter=0; /* counter of snake segments to add and walls to seed */
 int ck_press=0;       /* control key pressed indicator */
 int frame=0;          /* animation frame */
@@ -152,6 +157,10 @@ void init_game(int gbw, int gbh) {
         txt_char_tileset = SDL_CreateTextureFromSurface(renderer, srf_char_tileset);
         srf_font = IMG_Load("resources/good_neighbors.png");
         txt_font = SDL_CreateTextureFromSurface(renderer, srf_font);
+        srf_logo = IMG_Load("resources/logo.png");
+        txt_logo = SDL_CreateTextureFromSurface(renderer, srf_logo);
+        srf_trophy = IMG_Load("resources/trophy-bronze.png");
+        txt_trophy = SDL_CreateTextureFromSurface(renderer, srf_trophy);
         /* allocate tile info arrays */
         ground_tile = calloc(GROUND_TILES, sizeof(SDL_Rect));
         wall_tile = calloc(WALL_TILES, sizeof(SDL_Rect));
@@ -202,12 +211,16 @@ void init_game(int gbw, int gbh) {
 void cleanup_game(void) {
     SDL_RemoveTimer(game_timer);
 
+    SDL_DestroyTexture(txt_trophy);
+    SDL_DestroyTexture(txt_logo);
     SDL_DestroyTexture(txt_font);
     SDL_DestroyTexture(txt_char_tileset);
     SDL_DestroyTexture(txt_env_tileset);
     SDL_DestroyTexture(txt_food_tileset);
     SDL_DestroyTexture(txt_game_board);
 
+    SDL_FreeSurface(srf_trophy);
+    SDL_FreeSurface(srf_logo);
     SDL_FreeSurface(srf_font);
     SDL_FreeSurface(srf_char_tileset);
     SDL_FreeSurface(srf_env_tileset);
@@ -268,7 +281,10 @@ void update_play_state(void)
     else if (game_board[game_board_w*(hy+dhy)+hx+dhx].type == Food) {
         /* food hit - increase score, start expanding snake, seed new food */
         score++;
-        hi_score = score > hi_score ? score : hi_score;
+        if (score > hi_score) {
+            hi_score = score;
+            new_record = 1;
+        }
         expand_counter += score;
         seed_item(Food);
     }
@@ -341,6 +357,7 @@ void start_play(void) {
     seed_item(Food);
     ck_press = 0;
     frame = 0;
+    new_record = 0;
     game_state = Playing;
 }
 
@@ -363,10 +380,17 @@ void render_screen(void)
     SDL_Rect DstR = { 0, 0, TILE_SIZE, TILE_SIZE };
     SDL_Rect SrcR = { 0, 0, TILE_SIZE, TILE_SIZE };
     char score_string[15];
-    int char_frame = frame % CHAR_ANIM_FRAMES; /* frame in character animation */
+    int char_frame = 0; 
+    int img_w, img_h;
     /* render game backround with walls */
     SDL_RenderCopy(renderer, txt_game_board, NULL, NULL);
 
+    if (game_state != GameOver) {
+        char_frame = frame % CHAR_ANIM_FRAMES; /* frame in character animation */
+    }
+    else {
+        char_frame = 0;
+    }
     /* render snake body and food*/
     foff = 0; /* offset to game board field */
     for (y=0; y<game_board_h; y++) {
@@ -425,39 +449,59 @@ void render_screen(void)
         }
     }
 
+    int yc;
     /* Extra elements dependent on current game state. */
-    /* TODO: Currently these are placeholders - implement final UI */
-#define SET_WHITE_TEXT set_text_color(255, 255, 255)
-#define SET_GREY_TEXT set_text_color(192, 192, 192)
-#define SET_YELLOW_TEXT set_text_color(224, 192, 32)
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     switch (game_state) {
         case NotStarted:
+            /* "First start" screen */
+            SDL_QueryTexture(txt_logo, NULL, NULL, &img_w, &img_h);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);
-            DstR.w = 16*TILE_SIZE;        DstR.h = 8*TILE_SIZE;
-            DstR.x = (screen_w-DstR.w)/2; DstR.y = (screen_h-TILE_SIZE-DstR.h)/2;
+            DstR.w = 16*TILE_SIZE;        DstR.h = (2+4.5)*TILE_SIZE+img_h;
+            yc = (screen_h-TILE_SIZE-DstR.h)/2;
+            DstR.x = (screen_w-DstR.w)/2; DstR.y = yc;
             SDL_RenderFillRect(renderer, &DstR);
-            SET_WHITE_TEXT;
-            render_text(screen_w/2,    screen_h/2-3.5*TILE_SIZE, Center, "Vonsh");
+            yc += TILE_SIZE;
+            DstR.w = img_w;              DstR.h = img_h;
+            DstR.x = (screen_w-DstR.w)/2; DstR.y = yc;
+            SDL_RenderCopy(renderer, txt_logo, NULL, &DstR);
+            yc += img_h;          
             SET_YELLOW_TEXT;
-            render_text(screen_w/2-32, screen_h/2-2*TILE_SIZE,   Right, "Arrows:");
-            render_text(screen_w/2-32, screen_h/2-TILE_SIZE,     Right, "SPACE:");
-            render_text(screen_w/2-32, screen_h/2,               Right, "ESC:");
+            render_text(screen_w/2-32, yc,             Right, "Arrows:");
+            render_text(screen_w/2-32, yc+TILE_SIZE,   Right, "SPACE:");
+            render_text(screen_w/2-32, yc+2*TILE_SIZE, Right, "ESC:");
             SET_GREY_TEXT;
-            render_text(screen_w/2-32, screen_h/2-2*TILE_SIZE,   Left, " snake control");
-            render_text(screen_w/2-32, screen_h/2-TILE_SIZE,     Left, " Pause/Resume");
-            render_text(screen_w/2-32, screen_h/2,               Left, " Quit");
-            render_text(screen_w/2,    screen_h/2+1.5*TILE_SIZE, Center, "Press SPACE to play");
+            render_text(screen_w/2-32, yc,             Left, " snake control");
+            render_text(screen_w/2-32, yc+TILE_SIZE,   Left, " Pause/Resume");
+            render_text(screen_w/2-32, yc+2*TILE_SIZE, Left, " Quit");
+            render_text(screen_w/2,    yc+3.5*TILE_SIZE, Center, "Press SPACE to play");
             break;
         case GameOver:
-            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);
-            DstR.w = 16*TILE_SIZE;        DstR.h = 4*TILE_SIZE;
-            DstR.x = (screen_w-DstR.w)/2; DstR.y = (screen_h-TILE_SIZE-DstR.h)/2;
+            /* "Game Over" screen */
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);         
+            SDL_QueryTexture(txt_trophy, NULL, NULL, &img_w, &img_h);
+            DstR.w = 16*TILE_SIZE;
+            DstR.h = new_record ? 6*TILE_SIZE+img_h : 4.5*TILE_SIZE;
+            yc = (screen_h-TILE_SIZE-DstR.h)/2;
+            DstR.x = (screen_w-DstR.w)/2; DstR.y = yc;
             SDL_RenderFillRect(renderer, &DstR);
+            yc += TILE_SIZE;
             SET_WHITE_TEXT;
-            render_text(screen_w/2, screen_h/2-1.5*TILE_SIZE, Center, "Game Over");
+            render_text(screen_w/2, yc, Center, "Game Over");
+            yc += 1.5*TILE_SIZE;
+            if (new_record) {
+                DstR.w = img_w;               DstR.h = img_h;
+                DstR.x = (screen_w-DstR.w)/2; DstR.y = yc;
+                SDL_RenderCopy(renderer, txt_trophy, NULL, &DstR);
+                yc += DstR.h; 
+                if (frame%15<10) {
+                    SET_YELLOW_TEXT;
+                    render_text(screen_w/2, yc, Center, "NEW HI SCORE !");
+                }
+                yc += 1.5*TILE_SIZE;
+            }
             SET_GREY_TEXT;
-            render_text(screen_w/2, screen_h/2-0.25*TILE_SIZE, Center, "Press SPACE to play again");
+            render_text(screen_w/2, yc, Center, "Press SPACE to play again");
             break;
         case Playing:
             break;
@@ -507,6 +551,9 @@ int main(int argc, char ** argv)
                         update_play_state();
                     }
                     /* render each frame - both animations and "full" updated play state frames */
+                    render_screen();
+                }
+                else if (game_state == GameOver) {
                     render_screen();
                 }
                 break;
