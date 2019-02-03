@@ -52,9 +52,8 @@ SDL_Rect *food_tile = NULL;
 BoardField *game_board = NULL;
 GameState game_state = NotStarted;
 
-int game_board_w = (1024/TILE_SIZE); /* game board width(in full(16 pixels) tiles)*/
-int game_board_h = (768/TILE_SIZE-1); /* game board width(in full(16 pixels) tiles)*/
-int screen_w = 0, screen_h = 0; /* game window width and height */
+int game_board_w=0, game_board_h=0; /* game board width and height (in full tiles)*/
+int screen_w=0, screen_h=0; /* game window width and height */
 int dhx=0, dhy=0;     /* head movement direction */
 int hx=0, hy=0;       /* head coordinates */
 int tx=0, ty=0;       /* tail coordinates */
@@ -253,6 +252,108 @@ void seed_item(FieldType item_type)
     }
 }
 
+/* one iteration of game logic
+    retval:
+    0 - game continues
+    1 - game over
+ */
+void update_play_state(void)
+{
+    /* verify all kinds of collisions */
+    if (hx+dhx < 0             || hy+dhy < 0 ||
+        hx+dhx >= game_board_w || hy+dhy >= game_board_h) {
+        /* collision with game board edge */
+        game_state = GameOver; /* GAME OVER */
+    }
+    else if (game_board[game_board_w*(hy+dhy)+hx+dhx].type == Food) {
+        /* food hit - increase score, start expanding snake, seed new food */
+        score++;
+        hi_score = score > hi_score ? score : hi_score;
+        expand_counter += score;
+        seed_item(Food);
+    }
+    else if (game_board[game_board_w*(hy+dhy)+hx+dhx].type != Empty) {
+        /* collision with snake body or wall */
+        game_state = GameOver; /* GAME OVER */
+    }
+    if (game_state == Playing) {
+        int foff; /* game board field offset */
+        /* move snake head */
+        foff = game_board_w*hy+hx;
+        game_board[foff].ndx = dhx; /* update "neck" direction towards new head position */
+        game_board[foff].ndy = dhy;
+        hx += dhx;    hy += dhy; /* update head position */
+        foff = game_board_w*hy+hx;
+        game_board[foff].type = Snake;
+        game_board[foff].ndx = dhx; /* update head direction */
+        game_board[foff].ndy = dhy;
+        game_board[foff].pdx = -dhx;
+        game_board[foff].pdy = -dhy;
+
+        int ix = tx, iy = ty; /* indexes used for traversing snake body */
+        int pb1, pb2; /* buffers for shifting character kinds from tail to head */
+        /* shift character kinds from tail to head */
+        pb1 = game_board[game_board_w*iy+ix].p;
+        do {
+            /* move character kind from previous position to next. */
+            foff = game_board_w*iy+ix;
+            ix = ix + game_board[foff].ndx;
+            iy = iy + game_board[foff].ndy;
+            foff = game_board_w*iy+ix;
+            pb2 = game_board[foff].p; /* buffer current character kind... */
+            game_board[foff].p = pb1; /* and overwrite it with previous kind... */
+            pb1 = pb2; /* and then exchange buffers */
+        } while(ix!=hx || iy!=hy);
+
+        if (expand_counter==0) { /* move snake tail if not expanding */
+            foff = game_board_w*ty+tx; /* tail offset on game board */
+            tx = tx + game_board[foff].ndx;
+            ty = ty + game_board[foff].ndy;
+            game_board[foff].type = Empty;
+            game_board[foff].p = 0;
+            game_board[foff].ndx = game_board[foff].pdx = 0;
+            game_board[foff].ndy = game_board[foff].pdy = 0;
+        }
+        else { /* expand tail and seed new obstacle */
+            game_board[game_board_w*ty+tx].p = rand()%TOTAL_CHAR;
+            seed_item(Wall);
+            expand_counter--;
+        }
+        ck_press = 0; /* allow new control key press */
+    }
+}
+
+void start_play(void) {
+    /* Reset game board and generate new background texture. */
+    init_game_board();
+
+    /* initialize movement direction and position */
+    dhx = 0;   dhy = -1;
+    score = expand_counter = 0;
+    hx = tx = game_board_w/2;   hy = ty = game_board_h/2;
+    /* seed first piece of snake */
+    game_board[game_board_w*hy+hx].type = Snake;
+    game_board[game_board_w*hy+hx].p = rand()%TOTAL_CHAR;
+    game_board[game_board_w*hy+hx].ndx = dhx;
+    game_board[game_board_w*hy+hx].ndy = dhy;
+    game_board[game_board_w*hy+hx].pdx = -dhx;
+    game_board[game_board_w*hy+hx].pdy = -dhy;
+    seed_item(Food);
+    ck_press = 0;
+    frame = 0;
+    game_state = Playing;
+}
+
+void pause_play() {
+    game_state = Paused;
+}
+
+void resume_play() {
+    ck_press = 0;
+    game_state = Playing;
+}
+
+/************ SCREEN RENDERING *************/
 /* renders whole game state and blits everything to screen */
 void render_screen(void)
 {
@@ -376,111 +477,8 @@ void render_screen(void)
     SDL_RenderPresent(renderer);
 }
 
-/* one iteration of game logic
-    retval:
-    0 - game continues
-    1 - game over
- */
-int update_play_state(void)
-{
-    /* verify all kinds of collisions */
-    if (hx+dhx < 0             || hy+dhy < 0 ||
-        hx+dhx >= game_board_w || hy+dhy >= game_board_h) {
-        /* collision with game board edge */
-        return 1; /* GAME OVER */
-    }
-    else if (game_board[game_board_w*(hy+dhy)+hx+dhx].type == Food) {
-        /* food hit - increase score, start expanding snake, seed new food */
-        score++;
-        hi_score = score > hi_score ? score : hi_score;
-        expand_counter += score;
-        seed_item(Food);
-    }
-    else if (game_board[game_board_w*(hy+dhy)+hx+dhx].type != Empty) {
-        /* collision with snake body or wall */
-        return 1; /* GAME OVER */
-    }
-    int foff; /* game board field offset */
-    /* move snake head */
-    foff = game_board_w*hy+hx;
-    game_board[foff].ndx = dhx; /* update "neck" direction towards new head position */
-    game_board[foff].ndy = dhy;
-    hx += dhx;    hy += dhy; /* update head position */
-    foff = game_board_w*hy+hx;
-    game_board[foff].type = Snake;
-    game_board[foff].ndx = dhx; /* update head direction */
-    game_board[foff].ndy = dhy;
-    game_board[foff].pdx = -dhx;
-    game_board[foff].pdy = -dhy;
-
-    int ix = tx, iy = ty; /* indexes used for traversing snake body */
-    int pb1, pb2; /* buffers for shifting character kinds from tail to head */
-    /* shift character kinds from tail to head */
-    pb1 = game_board[game_board_w*iy+ix].p;
-    do {
-        /* move character kind from previous position to next. */
-        foff = game_board_w*iy+ix;
-        ix = ix + game_board[foff].ndx;
-        iy = iy + game_board[foff].ndy;
-        foff = game_board_w*iy+ix;
-        pb2 = game_board[foff].p; /* buffer current character kind... */
-        game_board[foff].p = pb1; /* and overwrite it with previous kind... */
-        pb1 = pb2; /* and then exchange buffers */
-    } while(ix!=hx || iy!=hy);
-
-    if (expand_counter==0) { /* move snake tail if not expanding */
-        foff = game_board_w*ty+tx; /* tail offset on game board */
-        tx = tx + game_board[foff].ndx;
-        ty = ty + game_board[foff].ndy;
-        game_board[foff].type = Empty;
-        game_board[foff].p = 0;
-        game_board[foff].ndx = game_board[foff].pdx = 0;
-        game_board[foff].ndy = game_board[foff].pdy = 0;
-    }
-    else { /* expand tail and seed new obstacle */
-        game_board[game_board_w*ty+tx].p = rand()%TOTAL_CHAR;
-        seed_item(Wall);
-        expand_counter--;
-    }
-    return 0;
-}
-
-void start_play(void) {
-    /* Reset game board and generate new background texture. */
-    init_game_board();
-
-    /* initialize movement direction and position */
-    dhx = 0;   dhy = -1;
-    score = expand_counter = 0;
-    hx = tx = game_board_w/2;   hy = ty = game_board_h/2;
-    /* seed first piece of snake */
-    game_board[game_board_w*hy+hx].type = Snake;
-    game_board[game_board_w*hy+hx].p = rand()%TOTAL_CHAR;
-    game_board[game_board_w*hy+hx].ndx = dhx;
-    game_board[game_board_w*hy+hx].ndy = dhy;
-    game_board[game_board_w*hy+hx].pdx = -dhx;
-    game_board[game_board_w*hy+hx].pdy = -dhy;
-    seed_item(Food);
-    ck_press = 0;
-    frame = 0;
-    game_state = Playing;
-
-    render_screen();
-}
-
-void pause_play() {
-    game_state = Paused;
-    render_screen(); /* PAUSE screen */
-}
-
-void resume_play() {
-    ck_press = 0;
-    game_state = Playing;
-}
-
 
 /*############ MAIN GAME LOOP #############*/
-
 int main(int argc, char ** argv)
 {
     int quit = 0;
@@ -497,18 +495,18 @@ int main(int argc, char ** argv)
         switch (event.type)
         {
             case SDL_USEREVENT: /* game tick event */
+                if (game_state == Paused) {
+                    /* animations are played in every state except "Paused" */
+                    break;
+                }
+                frame++;
                 if (game_state == Playing) {
-                    frame++;
-                    if (frame % CHAR_ANIM_FRAMES == 0) { /* updated game state frame */
-                        /* update play state and check if game is over */
-                        if (update_play_state()) {
-                            game_state = GameOver; /* GAME OVER */
-                        }
-                        else { /* play continues */
-                            ck_press = 0; /* allow new direction key press */
-                        }
+                    /* play state update and animations if playing */
+                    if (frame % CHAR_ANIM_FRAMES == 0) { /* updated play state frame */
+                        /* update play state */
+                        update_play_state();
                     }
-                    /* render each frame - both animations and "full" game state updates */
+                    /* render each frame - both animations and "full" updated play state frames */
                     render_screen();
                 }
                 break;
@@ -522,10 +520,12 @@ int main(int argc, char ** argv)
                         case GameOver:
                             /* start new play */
                             start_play();
+                            render_screen();
                             break;
                         case Playing:
                             /* pause play */
                             pause_play();
+                            render_screen();
                             break;
                         case Paused:
                             /* resume play */
@@ -550,6 +550,5 @@ int main(int argc, char ** argv)
         }
     }
     cleanup_game();
-
     return 0;
 }
