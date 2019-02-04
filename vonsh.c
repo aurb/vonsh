@@ -50,6 +50,14 @@ SDL_Surface *srf_trophy = NULL;
 SDL_Texture *txt_trophy = NULL;
 SDL_TimerID game_timer = 0;
 
+SDL_AudioSpec expWavSpec;
+uint32_t expWavLength;
+uint8_t *expWavBuffer;
+SDL_AudioSpec dieWavSpec;
+uint32_t dieWavLength;
+uint8_t *dieWavBuffer;
+SDL_AudioDeviceID audioDevId;
+
 SDL_Rect *ground_tile = NULL;
 SDL_Rect *wall_tile = NULL;
 SDL_Rect *food_tile = NULL;
@@ -129,7 +137,7 @@ void init_game(int gbw, int gbh) {
     /* Executed only at start of program */
     if (game_state == NotInitialized) {
         /* init SDL library */
-        SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER);
+        SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_AUDIO);
         IMG_Init(IMG_INIT_PNG);
     }
 
@@ -196,6 +204,9 @@ void init_game(int gbw, int gbh) {
             food_tile[i].x *= TILE_SIZE;   food_tile[i].y *= TILE_SIZE;
             food_tile[i].w = food_tile[i].h = TILE_SIZE;
         }
+        SDL_LoadWAV("resources/Powerup11.wav", &expWavSpec, &expWavBuffer, &expWavLength);
+        SDL_LoadWAV("resources/Randomize10.wav", &dieWavSpec, &dieWavBuffer, &dieWavLength);
+        audioDevId = SDL_OpenAudioDevice(NULL, 0, &expWavSpec, NULL, 0);
     }
 
     /* init text rendering functionality */
@@ -209,6 +220,10 @@ void init_game(int gbw, int gbh) {
 }
 
 void cleanup_game(void) {
+    SDL_CloseAudioDevice(audioDevId);
+    SDL_FreeWAV(expWavBuffer);
+    SDL_FreeWAV(dieWavBuffer);
+
     SDL_RemoveTimer(game_timer);
 
     SDL_DestroyTexture(txt_trophy);
@@ -334,8 +349,14 @@ void update_play_state(void)
             game_board[game_board_w*ty+tx].p = rand()%TOTAL_CHAR;
             seed_item(Wall);
             expand_counter--;
+            SDL_QueueAudio(audioDevId, expWavBuffer, expWavLength);
+            SDL_PauseAudioDevice(audioDevId, 0);
         }
         ck_press = 0; /* allow new control key press */
+    }
+    else if (game_state == GameOver) {
+        SDL_QueueAudio(audioDevId, dieWavBuffer, dieWavLength);
+        SDL_PauseAudioDevice(audioDevId, 0);
     }
 }
 
