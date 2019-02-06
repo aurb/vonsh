@@ -204,9 +204,9 @@ void init_game(int gbw, int gbh) {
             food_tile[i].x *= TILE_SIZE;   food_tile[i].y *= TILE_SIZE;
             food_tile[i].w = food_tile[i].h = TILE_SIZE;
         }
-        SDL_LoadWAV("resources/Powerup11.wav", &expWavSpec, &expWavBuffer, &expWavLength);
-        SDL_LoadWAV("resources/Randomize10.wav", &dieWavSpec, &dieWavBuffer, &dieWavLength);
-        audioDevId = SDL_OpenAudioDevice(NULL, 0, &expWavSpec, NULL, 0);
+        SDL_LoadWAV("resources/Powerup11.wav", &expWavSpec, &expWavBuffer, &expWavLength); /* TODO: check if returns NULL(error loading *.wav)*/
+        SDL_LoadWAV("resources/Randomize10.wav", &dieWavSpec, &dieWavBuffer, &dieWavLength); /* TODO: check if returns NULL(error loading *.wav)*/
+        audioDevId = SDL_OpenAudioDevice(NULL, 0, &expWavSpec, NULL, 0); /* TODO: check if 0(error)*/
     }
 
     /* init text rendering functionality */
