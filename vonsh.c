@@ -1,5 +1,6 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
+#include <SDL2/SDL_mixer.h>
 #include "text_renderer.h"
 
 typedef enum e_GameState {
@@ -50,13 +51,11 @@ SDL_Surface *srf_trophy = NULL;
 SDL_Texture *txt_trophy = NULL;
 SDL_TimerID game_timer = 0;
 
-SDL_AudioSpec expWavSpec;
-uint32_t expWavLength;
-uint8_t *expWavBuffer;
-SDL_AudioSpec dieWavSpec;
-uint32_t dieWavLength;
-uint8_t *dieWavBuffer;
-SDL_AudioDeviceID audioDevId;
+Mix_Chunk *exp_chunk = NULL;
+Mix_Chunk *die_chunk = NULL;
+Mix_Music *idle_music = NULL;
+Mix_Music *play_music = NULL;
+
 
 SDL_Rect *ground_tile = NULL;
 SDL_Rect *wall_tile = NULL;
@@ -204,9 +203,19 @@ void init_game(int gbw, int gbh) {
             food_tile[i].x *= TILE_SIZE;   food_tile[i].y *= TILE_SIZE;
             food_tile[i].w = food_tile[i].h = TILE_SIZE;
         }
-        SDL_LoadWAV("resources/Powerup11.wav", &expWavSpec, &expWavBuffer, &expWavLength); /* TODO: check if returns NULL(error loading *.wav)*/
-        SDL_LoadWAV("resources/Randomize10.wav", &dieWavSpec, &dieWavBuffer, &dieWavLength); /* TODO: check if returns NULL(error loading *.wav)*/
-        audioDevId = SDL_OpenAudioDevice(NULL, 0, &expWavSpec, NULL, 0); /* TODO: check if 0(error)*/
+
+        if( Mix_OpenAudio( 44100, MIX_DEFAULT_FORMAT, MIX_DEFAULT_CHANNELS, 4096 ) == -1 ) {
+            printf("Error opening audio: %s\n", Mix_GetError());
+        }
+        Mix_AllocateChannels(4);
+        exp_chunk = Mix_LoadWAV("resources/exp_sound.wav");
+        if (!exp_chunk) {
+            printf("Error loading sample: %s\n", Mix_GetError());
+        }
+        die_chunk = Mix_LoadWAV("resources/die_sound.wav");
+        if (!die_chunk) {
+            printf("Error loading sample: %s\n", Mix_GetError());
+        }
     }
 
     /* init text rendering functionality */
@@ -220,9 +229,9 @@ void init_game(int gbw, int gbh) {
 }
 
 void cleanup_game(void) {
-    SDL_CloseAudioDevice(audioDevId);
-    SDL_FreeWAV(expWavBuffer);
-    SDL_FreeWAV(dieWavBuffer);
+    Mix_FreeChunk(exp_chunk);
+    Mix_FreeChunk(die_chunk);
+    Mix_CloseAudio();
 
     SDL_RemoveTimer(game_timer);
 
@@ -349,14 +358,14 @@ void update_play_state(void)
             game_board[game_board_w*ty+tx].p = rand()%TOTAL_CHAR;
             seed_item(Wall);
             expand_counter--;
-            SDL_QueueAudio(audioDevId, expWavBuffer, expWavLength);
-            SDL_PauseAudioDevice(audioDevId, 0);
+            Mix_VolumeChunk(exp_chunk, MIX_MAX_VOLUME);
+            Mix_PlayChannel(-1, exp_chunk, 0); /* TODO: might fail - shall we handle this? */
         }
         ck_press = 0; /* allow new control key press */
     }
     else if (game_state == GameOver) {
-        SDL_QueueAudio(audioDevId, dieWavBuffer, dieWavLength);
-        SDL_PauseAudioDevice(audioDevId, 0);
+        Mix_VolumeChunk(die_chunk, MIX_MAX_VOLUME);
+        Mix_PlayChannel(-1, die_chunk, 0); /* TODO: might fail - shall we handle this? */
     }
 }
 
@@ -486,7 +495,7 @@ void render_screen(void)
             DstR.w = img_w;              DstR.h = img_h;
             DstR.x = (screen_w-DstR.w)/2; DstR.y = yc;
             SDL_RenderCopy(renderer, txt_logo, NULL, &DstR);
-            yc += img_h;          
+            yc += img_h;
             SET_YELLOW_TEXT;
             render_text(screen_w/2-32, yc,             Right, "Arrows:");
             render_text(screen_w/2-32, yc+TILE_SIZE,   Right, "SPACE:");
@@ -499,7 +508,7 @@ void render_screen(void)
             break;
         case GameOver:
             /* "Game Over" screen */
-            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);         
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);
             SDL_QueryTexture(txt_trophy, NULL, NULL, &img_w, &img_h);
             DstR.w = 16*TILE_SIZE;
             DstR.h = new_record ? 6*TILE_SIZE+img_h : 4.5*TILE_SIZE;
