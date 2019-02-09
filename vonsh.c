@@ -216,6 +216,15 @@ void init_game(int gbw, int gbh) {
         if (!die_chunk) {
             printf("Error loading sample: %s\n", Mix_GetError());
         }
+        idle_music = Mix_LoadMUS("resources/idle_tune.mp3");
+        if (!idle_music) {
+            printf("Error loading music: %s\n", Mix_GetError());
+        }
+        play_music = Mix_LoadMUS("resources/play_tune.mp3");
+        if (!play_music) {
+            printf("Error loading music: %s\n", Mix_GetError());
+        }
+        Mix_PlayMusic(idle_music, -1); /* TODO: might fail - shall we handle this? */
     }
 
     /* init text rendering functionality */
@@ -358,14 +367,15 @@ void update_play_state(void)
             game_board[game_board_w*ty+tx].p = rand()%TOTAL_CHAR;
             seed_item(Wall);
             expand_counter--;
-            Mix_VolumeChunk(exp_chunk, MIX_MAX_VOLUME);
+            Mix_VolumeChunk(exp_chunk, MIX_MAX_VOLUME/3);
             Mix_PlayChannel(-1, exp_chunk, 0); /* TODO: might fail - shall we handle this? */
         }
         ck_press = 0; /* allow new control key press */
     }
     else if (game_state == GameOver) {
-        Mix_VolumeChunk(die_chunk, MIX_MAX_VOLUME);
+        Mix_VolumeChunk(die_chunk, MIX_MAX_VOLUME/3);
         Mix_PlayChannel(-1, die_chunk, 0); /* TODO: might fail - shall we handle this? */
+        Mix_PlayMusic(idle_music, -1); /* TODO: might fail - shall we handle this? */
     }
 }
 
@@ -389,15 +399,18 @@ void start_play(void) {
     frame = 0;
     new_record = 0;
     game_state = Playing;
+    Mix_PlayMusic(play_music, -1);
 }
 
 void pause_play() {
     game_state = Paused;
+    Mix_PauseMusic();
 }
 
 void resume_play() {
     ck_press = 0;
     game_state = Playing;
+    Mix_ResumeMusic();
 }
 
 /************ SCREEN RENDERING *************/

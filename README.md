@@ -4,10 +4,11 @@ https://github.com/aurb/vonsh
 
 ## How to build
 make
-./vonsh
 
 ## How to play
+Call "./vonsh".
 Use arrow keys to move snake. Eat food, avoid obstacles and screen edges.
+SPACE to pause/unpause, ESC to quit.
 
 ## Authors
 ### Code
@@ -21,6 +22,10 @@ Use arrow keys to move snake. Eat food, avoid obstacles and screen edges.
 + Andrzej Urbaniak
 ### Sound Effects
 + Damaged Panda https://opengameart.org/content/100-plus-game-sound-effects-wavoggm4a
+### Music
++ Juhani Junkala https://opengameart.org/content/5-chiptunes-action
++ Przemyslaw Sikorski https://opengameart.org/content/puzzle-tune-1
+Music licensed under CC-BY 3.0 https://creativecommons.org/licenses/by/3.0/
 
 ## License
 MIT License
