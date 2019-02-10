@@ -2,6 +2,16 @@
 SDL-based snake game
 https://github.com/aurb/vonsh
 
+## Depedencies
+Needed to run game:
++ libsdl2
++ libsdl2-image
++ libsdl2-mixer
+Needed to build:
++ libsdl2-dev
++ libsdl2-image-dev
++ libsdl2-mixer-dev
+
 ## How to build
 make
 

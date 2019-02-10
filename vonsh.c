@@ -74,6 +74,8 @@ int new_record=0;     /* flag set if user beats previous record */
 int expand_counter=0; /* counter of snake segments to add and walls to seed */
 int ck_press=0;       /* control key pressed indicator */
 int frame=0;          /* animation frame */
+int music_on=0;
+int sfx_on=0;
 
 /* Callback for animation frame timer.
    Generates SDL_USEREVENT when main game loop shall render next frame. */
@@ -235,6 +237,8 @@ void init_game(int gbw, int gbh) {
     game_timer = SDL_AddTimer(GAME_SPEED/CHAR_ANIM_FRAMES, tick_callback, 0);
     game_state = NotStarted;
     hi_score = 0;
+    music_on = 1; /* music and sound effects enabled by default */
+    sfx_on = 1;
 }
 
 void cleanup_game(void) {
@@ -367,15 +371,22 @@ void update_play_state(void)
             game_board[game_board_w*ty+tx].p = rand()%TOTAL_CHAR;
             seed_item(Wall);
             expand_counter--;
-            Mix_VolumeChunk(exp_chunk, MIX_MAX_VOLUME/3);
-            Mix_PlayChannel(-1, exp_chunk, 0); /* TODO: might fail - shall we handle this? */
+            if (sfx_on) {
+                Mix_VolumeChunk(exp_chunk, MIX_MAX_VOLUME/3);
+                Mix_PlayChannel(-1, exp_chunk, 0); /* TODO: might fail - shall we handle this? */
+            }
         }
         ck_press = 0; /* allow new control key press */
     }
     else if (game_state == GameOver) {
-        Mix_VolumeChunk(die_chunk, MIX_MAX_VOLUME/3);
-        Mix_PlayChannel(-1, die_chunk, 0); /* TODO: might fail - shall we handle this? */
+        if (sfx_on) {
+            Mix_VolumeChunk(die_chunk, MIX_MAX_VOLUME/3);
+            Mix_PlayChannel(-1, die_chunk, 0); /* TODO: might fail - shall we handle this? */
+        }
         Mix_PlayMusic(idle_music, -1); /* TODO: might fail - shall we handle this? */
+        if (!music_on) {
+            Mix_PauseMusic();
+        }
     }
 }
 
@@ -400,17 +411,24 @@ void start_play(void) {
     new_record = 0;
     game_state = Playing;
     Mix_PlayMusic(play_music, -1);
+    if (!music_on) {
+        Mix_PauseMusic();
+    }
 }
 
 void pause_play() {
     game_state = Paused;
-    Mix_PauseMusic();
+    if (music_on) {
+        Mix_PauseMusic();
+    }
 }
 
 void resume_play() {
     ck_press = 0;
     game_state = Playing;
-    Mix_ResumeMusic();
+    if (music_on) {
+        Mix_ResumeMusic();
+    }
 }
 
 /************ SCREEN RENDERING *************/
@@ -422,7 +440,7 @@ void render_screen(void)
     int foff; /* game board field offset */
     SDL_Rect DstR = { 0, 0, TILE_SIZE, TILE_SIZE };
     SDL_Rect SrcR = { 0, 0, TILE_SIZE, TILE_SIZE };
-    char score_string[15];
+    char bottom_string[15];
     int char_frame = 0; 
     int img_w, img_h;
     /* render game backround with walls */
@@ -500,7 +518,7 @@ void render_screen(void)
             /* "First start" screen */
             SDL_QueryTexture(txt_logo, NULL, NULL, &img_w, &img_h);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);
-            DstR.w = 16*TILE_SIZE;        DstR.h = (2+4.5)*TILE_SIZE+img_h;
+            DstR.w = 16*TILE_SIZE;        DstR.h = (2+6.5)*TILE_SIZE+img_h;
             yc = (screen_h-TILE_SIZE-DstR.h)/2;
             DstR.x = (screen_w-DstR.w)/2; DstR.y = yc;
             SDL_RenderFillRect(renderer, &DstR);
@@ -512,12 +530,16 @@ void render_screen(void)
             SET_YELLOW_TEXT;
             render_text(screen_w/2-32, yc,             Right, "Arrows:");
             render_text(screen_w/2-32, yc+TILE_SIZE,   Right, "SPACE:");
-            render_text(screen_w/2-32, yc+2*TILE_SIZE, Right, "ESC:");
+            render_text(screen_w/2-32, yc+2*TILE_SIZE, Right, "Z:");
+            render_text(screen_w/2-32, yc+3*TILE_SIZE, Right, "X:");
+            render_text(screen_w/2-32, yc+4*TILE_SIZE, Right, "ESC:");
             SET_GREY_TEXT;
-            render_text(screen_w/2-32, yc,             Left, " snake control");
+            render_text(screen_w/2-32, yc,             Left, " Snake control");
             render_text(screen_w/2-32, yc+TILE_SIZE,   Left, " Pause/Resume");
-            render_text(screen_w/2-32, yc+2*TILE_SIZE, Left, " Quit");
-            render_text(screen_w/2,    yc+3.5*TILE_SIZE, Center, "Press SPACE to play");
+            render_text(screen_w/2-32, yc+2*TILE_SIZE, Left, " Music");
+            render_text(screen_w/2-32, yc+3*TILE_SIZE, Left, " Sound effects");
+            render_text(screen_w/2-32, yc+4*TILE_SIZE, Left, " Quit");
+            render_text(screen_w/2,    yc+5.5*TILE_SIZE, Center, "Press SPACE to play");
             break;
         case GameOver:
             /* "Game Over" screen */
@@ -555,12 +577,18 @@ void render_screen(void)
         default:
             break;
     }
-    /* print score and hi score */
+    /* print score, hi score and music/sound effects state*/
     SET_WHITE_TEXT;
-    sprintf(score_string, "SCORE: %d", score);
-    render_text(TILE_SIZE, screen_h-TILE_SIZE, Left, score_string);
-    sprintf(score_string, "HI SCORE: %d", hi_score);
-    render_text(screen_w-TILE_SIZE, screen_h-TILE_SIZE, Right, score_string);
+    sprintf(bottom_string, "SCORE: %d", score);
+    render_text(TILE_SIZE, screen_h-TILE_SIZE, Left, bottom_string);
+    sprintf(bottom_string, "HI SCORE: %d", hi_score);
+    render_text(screen_w-TILE_SIZE, screen_h-TILE_SIZE, Right, bottom_string);
+    SET_GREY_TEXT;
+    sprintf(bottom_string, "Music %s  ", music_on ? "ON " : "OFF");
+    render_text(screen_w/2, screen_h-TILE_SIZE, Right, bottom_string);
+    sprintf(bottom_string, "   SFX %s", sfx_on ? "ON" : "OFF");
+    render_text(screen_w/2, screen_h-TILE_SIZE, Left, bottom_string);
+
     SDL_RenderPresent(renderer);
 }
 
@@ -624,6 +652,22 @@ int main(int argc, char ** argv)
                         default:
                             break;
                     }
+                }
+                else if (event.key.keysym.sym == SDLK_z && event.key.repeat == 0) {
+                    music_on = !music_on;
+                    render_screen();
+                    if (game_state != Paused) {
+                        if (music_on) {
+                            Mix_ResumeMusic();
+                        }
+                        else {
+                            Mix_PauseMusic();
+                        }
+                    }
+                }
+                else if (event.key.keysym.sym == SDLK_x && event.key.repeat == 0) {
+                    sfx_on = !sfx_on;
+                    render_screen();
                 }
                 else if (game_state == Playing && event.key.repeat == 0 && ck_press == 0) {
                     switch (event.key.keysym.sym) {
