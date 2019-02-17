@@ -3,6 +3,10 @@
 #include <SDL2/SDL_mixer.h>
 #include "text_renderer.h"
 
+#define VERSION_STR "v0.0"
+const char *resource_dir = "/usr/share/games/vonsh/";
+char resource_path[100];
+
 typedef enum e_GameState {
     NotInitialized,
     NotStarted,
@@ -76,6 +80,11 @@ int ck_press=0;       /* control key pressed indicator */
 int frame=0;          /* animation frame */
 int music_on=0;
 int sfx_on=0;
+
+const char *get_resource_path(const char *filename) {
+    sprintf(resource_path, "%s%s", resource_dir, filename);
+    return resource_path;
+}
 
 /* Callback for animation frame timer.
    Generates SDL_USEREVENT when main game loop shall render next frame. */
@@ -158,17 +167,17 @@ void init_game(int gbw, int gbh) {
     /* Executed only at start of program */
     if (game_state == NotInitialized) {
         /* load textures */
-        srf_env_tileset = IMG_Load("resources/board_tiles.png");
+        srf_env_tileset = IMG_Load(get_resource_path("board_tiles.png"));
         txt_env_tileset = SDL_CreateTextureFromSurface(renderer, srf_env_tileset);
-        srf_food_tileset = IMG_Load("resources/food_tiles.png");
+        srf_food_tileset = IMG_Load(get_resource_path("food_tiles.png"));
         txt_food_tileset = SDL_CreateTextureFromSurface(renderer, srf_food_tileset);
-        srf_char_tileset = IMG_Load("resources/character_tiles.png");
+        srf_char_tileset = IMG_Load(get_resource_path("character_tiles.png"));
         txt_char_tileset = SDL_CreateTextureFromSurface(renderer, srf_char_tileset);
-        srf_font = IMG_Load("resources/good_neighbors.png");
+        srf_font = IMG_Load(get_resource_path("good_neighbors.png"));
         txt_font = SDL_CreateTextureFromSurface(renderer, srf_font);
-        srf_logo = IMG_Load("resources/logo.png");
+        srf_logo = IMG_Load(get_resource_path("logo.png"));
         txt_logo = SDL_CreateTextureFromSurface(renderer, srf_logo);
-        srf_trophy = IMG_Load("resources/trophy-bronze.png");
+        srf_trophy = IMG_Load(get_resource_path("trophy-bronze.png"));
         txt_trophy = SDL_CreateTextureFromSurface(renderer, srf_trophy);
         /* allocate tile info arrays */
         ground_tile = calloc(GROUND_TILES, sizeof(SDL_Rect));
@@ -210,19 +219,19 @@ void init_game(int gbw, int gbh) {
             printf("Error opening audio: %s\n", Mix_GetError());
         }
         Mix_AllocateChannels(4);
-        exp_chunk = Mix_LoadWAV("resources/exp_sound.wav");
+        exp_chunk = Mix_LoadWAV(get_resource_path("exp_sound.wav"));
         if (!exp_chunk) {
             printf("Error loading sample: %s\n", Mix_GetError());
         }
-        die_chunk = Mix_LoadWAV("resources/die_sound.wav");
+        die_chunk = Mix_LoadWAV(get_resource_path("die_sound.wav"));
         if (!die_chunk) {
             printf("Error loading sample: %s\n", Mix_GetError());
         }
-        idle_music = Mix_LoadMUS("resources/idle_tune.mp3");
+        idle_music = Mix_LoadMUS(get_resource_path("idle_tune.mp3"));
         if (!idle_music) {
             printf("Error loading music: %s\n", Mix_GetError());
         }
-        play_music = Mix_LoadMUS("resources/play_tune.mp3");
+        play_music = Mix_LoadMUS(get_resource_path("play_tune.mp3"));
         if (!play_music) {
             printf("Error loading music: %s\n", Mix_GetError());
         }
@@ -518,7 +527,7 @@ void render_screen(void)
             /* "First start" screen */
             SDL_QueryTexture(txt_logo, NULL, NULL, &img_w, &img_h);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);
-            DstR.w = 16*TILE_SIZE;        DstR.h = (2+6.5)*TILE_SIZE+img_h;
+            DstR.w = 16*TILE_SIZE;        DstR.h = (2+7.5)*TILE_SIZE+img_h;
             yc = (screen_h-TILE_SIZE-DstR.h)/2;
             DstR.x = (screen_w-DstR.w)/2; DstR.y = yc;
             SDL_RenderFillRect(renderer, &DstR);
@@ -527,6 +536,9 @@ void render_screen(void)
             DstR.x = (screen_w-DstR.w)/2; DstR.y = yc;
             SDL_RenderCopy(renderer, txt_logo, NULL, &DstR);
             yc += img_h;
+            SET_GREY_TEXT;
+            render_text(screen_w/2,    yc,             Center, VERSION_STR);
+            yc += TILE_SIZE;
             SET_YELLOW_TEXT;
             render_text(screen_w/2-32, yc,             Right, "Arrows:");
             render_text(screen_w/2-32, yc+TILE_SIZE,   Right, "SPACE:");
@@ -539,6 +551,7 @@ void render_screen(void)
             render_text(screen_w/2-32, yc+2*TILE_SIZE, Left, " Music");
             render_text(screen_w/2-32, yc+3*TILE_SIZE, Left, " Sound effects");
             render_text(screen_w/2-32, yc+4*TILE_SIZE, Left, " Quit");
+            SET_WHITE_TEXT;
             render_text(screen_w/2,    yc+5.5*TILE_SIZE, Center, "Press SPACE to play");
             break;
         case GameOver:
@@ -558,7 +571,7 @@ void render_screen(void)
                 DstR.w = img_w;               DstR.h = img_h;
                 DstR.x = (screen_w-DstR.w)/2; DstR.y = yc;
                 SDL_RenderCopy(renderer, txt_trophy, NULL, &DstR);
-                yc += DstR.h; 
+                yc += DstR.h;
                 if (frame%15<10) {
                     SET_YELLOW_TEXT;
                     render_text(screen_w/2, yc, Center, "NEW HI SCORE !");
