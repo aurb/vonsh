@@ -81,7 +81,7 @@ int frame=0;          /* animation frame */
 int music_on=0;
 int sfx_on=0;
 
-const char *get_resource_path(const char *filename) {
+const char *make_res_path(const char *filename) {
     sprintf(resource_path, "%s%s", resource_dir, filename);
     return resource_path;
 }
@@ -134,8 +134,33 @@ void init_game_board(void) {
     SDL_SetRenderTarget(renderer, NULL);
 }
 
+/*
+    Load image from file and create texture using it
+    retval 0 - texture loaded OK.
+    retval 1 - texture not loaded
+ */
+static int load_texture(SDL_Surface **srf, SDL_Texture **txt, const char *filename) {
+    if ((*srf = IMG_Load(make_res_path(filename))) == NULL) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "Error loading image", make_res_path(filename), NULL);
+        return 1;
+    }
+    else if ((*txt = SDL_CreateTextureFromSurface(renderer, *srf)) == NULL) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "Error creating texture", SDL_GetError(), NULL);
+        return 1;
+    }
+    else {
+        return 0;
+    }
+}
 
-void init_game(int gbw, int gbh) {
+/*
+    Initialize game engine
+    retval 0 - initialization OK.
+    retval 1 - error during init. Program has to be terminated
+ */
+int init_game(int gbw, int gbh) {
     /* game board dimensions(in full tiles) */
     game_board_w = gbw;
     game_board_h = gbh;
@@ -147,38 +172,88 @@ void init_game(int gbw, int gbh) {
     /* Executed only at start of program */
     if (game_state == NotInitialized) {
         /* init SDL library */
-        SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_AUDIO);
-        IMG_Init(IMG_INIT_PNG);
+        if (SDL_Init(SDL_INIT_VIDEO)) {
+            printf("Error initializing video subsystem: %s\n", SDL_GetError());
+            return 1;
+        }
+        else if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_AUDIO)) {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                "SDL initialization error", SDL_GetError(), NULL);
+            return 1;
+        }
+        else if ((IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG) == 0) {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                "SDL Image initialization error", IMG_GetError(), NULL);
+            return 1;
+        }
+    }
+
+    if( Mix_OpenAudio( 44100, MIX_DEFAULT_FORMAT, MIX_DEFAULT_CHANNELS, 4096 ) == -1 ) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "Error opening audio device", Mix_GetError(), NULL);
+        return 1;
+    }
+    Mix_AllocateChannels(4);
+    if ((exp_chunk = Mix_LoadWAV(make_res_path("exp_sound.wav"))) == NULL) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "Error loading sample", make_res_path("exp_sound.wav"), NULL);
+        return 1;
+    }
+    if ((die_chunk = Mix_LoadWAV(make_res_path("die_sound.wav"))) == NULL) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "Error loading sample", make_res_path("die_sound.wav"), NULL);
+        return 1;
+    }
+    if ((idle_music = Mix_LoadMUS(make_res_path("idle_tune.mp3"))) == NULL) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "Error loading music", make_res_path("idle_tune.mp3"), NULL);
+        return 1;
+    }
+    if ((play_music = Mix_LoadMUS(make_res_path("play_tune.mp3"))) == NULL) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "Error loading music", make_res_path("play_tune.mp3"), NULL);
+        return 1;
     }
 
     /* TODO: Adjust below paragraph to support in-game screen resolution changes */
-    screen = SDL_CreateWindow("Vonsh", SDL_WINDOWPOS_CENTERED,
-                 SDL_WINDOWPOS_CENTERED, screen_w, screen_h, 0);
-    renderer = SDL_CreateRenderer(screen, -1,
-                   SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE);
+    if ((screen = SDL_CreateWindow("Vonsh", SDL_WINDOWPOS_CENTERED,
+                 SDL_WINDOWPOS_CENTERED, screen_w, screen_h, 0)) == NULL) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "SDL window not created", SDL_GetError(), NULL);
+        return 1;
+    }
+    else if ((renderer = SDL_CreateRenderer(screen, -1,
+                   SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE)) == NULL) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "SDL renderer not created", SDL_GetError(), NULL);
+        return 1;
+    }
     /* texture for rendering game background with obstacles */
-    txt_game_board = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                        SDL_TEXTUREACCESS_TARGET, screen_w, screen_h);
+    else if ((txt_game_board = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+                        SDL_TEXTUREACCESS_TARGET, screen_w, screen_h)) == NULL) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "Error creating background texture", SDL_GetError(), NULL);
+        return 1;
+    }
     if (game_board != NULL) {
         free(game_board);
     }
+    /* TODO: add failure-detecting wrapper for memallocs */
     game_board = calloc(game_board_w*game_board_h, sizeof(BoardField));
 
     /* Executed only at start of program */
     if (game_state == NotInitialized) {
         /* load textures */
-        srf_env_tileset = IMG_Load(get_resource_path("board_tiles.png"));
-        txt_env_tileset = SDL_CreateTextureFromSurface(renderer, srf_env_tileset);
-        srf_food_tileset = IMG_Load(get_resource_path("food_tiles.png"));
-        txt_food_tileset = SDL_CreateTextureFromSurface(renderer, srf_food_tileset);
-        srf_char_tileset = IMG_Load(get_resource_path("character_tiles.png"));
-        txt_char_tileset = SDL_CreateTextureFromSurface(renderer, srf_char_tileset);
-        srf_font = IMG_Load(get_resource_path("good_neighbors.png"));
-        txt_font = SDL_CreateTextureFromSurface(renderer, srf_font);
-        srf_logo = IMG_Load(get_resource_path("logo.png"));
-        txt_logo = SDL_CreateTextureFromSurface(renderer, srf_logo);
-        srf_trophy = IMG_Load(get_resource_path("trophy-bronze.png"));
-        txt_trophy = SDL_CreateTextureFromSurface(renderer, srf_trophy);
+        if (load_texture(&srf_env_tileset, &txt_env_tileset, "board_tiles.png") ||
+            load_texture(&srf_food_tileset, &txt_food_tileset, "food_tiles.png") ||
+            load_texture(&srf_char_tileset, &txt_char_tileset, "character_tiles.png") ||
+            load_texture(&srf_font, &txt_font, "good_neighbors.png") ||
+            load_texture(&srf_logo, &txt_logo, "logo.png") ||
+            load_texture(&srf_trophy, &txt_trophy, "trophy-bronze.png")) {
+            /* loading of any of the textures failed */
+            return 1;
+        }
+
         /* allocate tile info arrays */
         ground_tile = calloc(GROUND_TILES, sizeof(SDL_Rect));
         wall_tile = calloc(WALL_TILES, sizeof(SDL_Rect));
@@ -215,26 +290,6 @@ void init_game(int gbw, int gbh) {
             food_tile[i].w = food_tile[i].h = TILE_SIZE;
         }
 
-        if( Mix_OpenAudio( 44100, MIX_DEFAULT_FORMAT, MIX_DEFAULT_CHANNELS, 4096 ) == -1 ) {
-            printf("Error opening audio: %s\n", Mix_GetError());
-        }
-        Mix_AllocateChannels(4);
-        exp_chunk = Mix_LoadWAV(get_resource_path("exp_sound.wav"));
-        if (!exp_chunk) {
-            printf("Error loading sample: %s\n", Mix_GetError());
-        }
-        die_chunk = Mix_LoadWAV(get_resource_path("die_sound.wav"));
-        if (!die_chunk) {
-            printf("Error loading sample: %s\n", Mix_GetError());
-        }
-        idle_music = Mix_LoadMUS(get_resource_path("idle_tune.mp3"));
-        if (!idle_music) {
-            printf("Error loading music: %s\n", Mix_GetError());
-        }
-        play_music = Mix_LoadMUS(get_resource_path("play_tune.mp3"));
-        if (!play_music) {
-            printf("Error loading music: %s\n", Mix_GetError());
-        }
         Mix_PlayMusic(idle_music, -1); /* TODO: might fail - shall we handle this? */
     }
 
@@ -248,6 +303,7 @@ void init_game(int gbw, int gbh) {
     hi_score = 0;
     music_on = 1; /* music and sound effects enabled by default */
     sfx_on = 1;
+    return 0;
 }
 
 void cleanup_game(void) {
@@ -392,6 +448,7 @@ void update_play_state(void)
             Mix_VolumeChunk(die_chunk, MIX_MAX_VOLUME/3);
             Mix_PlayChannel(-1, die_chunk, 0); /* TODO: might fail - shall we handle this? */
         }
+        /* TODO: music shall start from beginning after starting game */
         Mix_PlayMusic(idle_music, -1); /* TODO: might fail - shall we handle this? */
         if (!music_on) {
             Mix_PauseMusic();
@@ -419,6 +476,7 @@ void start_play(void) {
     frame = 0;
     new_record = 0;
     game_state = Playing;
+    /* TODO: music shall start from beginning after new  */
     Mix_PlayMusic(play_music, -1);
     if (!music_on) {
         Mix_PauseMusic();
@@ -614,7 +672,11 @@ int main(int argc, char ** argv)
 
     /* basic game configuration */
     game_state = NotInitialized;
-    init_game(1024/TILE_SIZE, 768/TILE_SIZE-1);
+    if (init_game(1024/TILE_SIZE, 768/TILE_SIZE-1)) {
+        /* Error during init. Terminating game. */
+        cleanup_game();
+        return 1;
+    }
 
     render_screen();
     while (!quit)
