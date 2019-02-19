@@ -36,7 +36,7 @@ typedef struct BoardField {
 #define GROUND_TILES 8
 #define WALL_TILES 4
 #define FOOD_TILES 6
-#define TOTAL_CHAR 12
+#define TOTAL_CHAR 24
 #define CHAR_ANIM_FRAMES 4
 SDL_Window *screen = NULL;
 SDL_Renderer *renderer = NULL;
@@ -238,8 +238,11 @@ int init_game(int gbw, int gbh) {
     if (game_board != NULL) {
         free(game_board);
     }
-    /* TODO: add failure-detecting wrapper for memallocs */
-    game_board = calloc(game_board_w*game_board_h, sizeof(BoardField));
+    if ((game_board = calloc(game_board_w*game_board_h, sizeof(BoardField))) == NULL) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "Error", "Error allocating memory", NULL);
+        return 1;
+    }
 
     /* Executed only at start of program */
     if (game_state == NotInitialized) {
@@ -255,9 +258,13 @@ int init_game(int gbw, int gbh) {
         }
 
         /* allocate tile info arrays */
-        ground_tile = calloc(GROUND_TILES, sizeof(SDL_Rect));
-        wall_tile = calloc(WALL_TILES, sizeof(SDL_Rect));
-        food_tile = calloc(FOOD_TILES, sizeof(SDL_Rect));
+        if ((ground_tile = calloc(GROUND_TILES, sizeof(SDL_Rect))) == NULL ||
+            (wall_tile = calloc(WALL_TILES, sizeof(SDL_Rect))) == NULL ||
+            (food_tile = calloc(FOOD_TILES, sizeof(SDL_Rect))) == NULL) {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                "Error", "Error allocating memory", NULL);
+            return 1;
+        }
         /* fill tile info arrays */
         ground_tile[0].x = 0;   ground_tile[0].y = 0;
         ground_tile[1].x = 1;   ground_tile[1].y = 0;
@@ -345,6 +352,8 @@ void seed_item(FieldType item_type)
 {
     int x = 0, y = 0; /* coordinates */
     while(1) {
+        /* TODO: random number generator shall be seeded with unique value.
+                 Maybe I should consider also other generator than C stdlib */
         x = rand() % game_board_w;
         y = rand() % game_board_h;
         if (game_board[game_board_w*y+x].type == Empty) {
