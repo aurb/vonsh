@@ -1,7 +1,9 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_mixer.h>
+#include <time.h>
 #include "text_renderer.h"
+#include "pcg_basic.h"
 
 #define VERSION_STR "v0.0"
 const char *resource_dir = "/usr/share/games/vonsh/";
@@ -127,7 +129,7 @@ void init_game_board(void) {
     for (y=0; y<game_board_h; y++)
         for (x=0; x<game_board_w; x++) {
             DstR.x = x*TILE_SIZE; DstR.y = y*TILE_SIZE;
-            SDL_RenderCopy(renderer, txt_env_tileset, &ground_tile[rand()%GROUND_TILES], &DstR);
+            SDL_RenderCopy(renderer, txt_env_tileset, &ground_tile[pcg32_boundedrand(GROUND_TILES)], &DstR);
         }
 
     /* Detach the game board texture from renderer */
@@ -186,6 +188,7 @@ int init_game(int gbw, int gbh) {
                 "SDL Image initialization error", IMG_GetError(), NULL);
             return 1;
         }
+        pcg32_srandom(time(NULL), 0x12345678); /* seed random number generator */
     }
 
     if( Mix_OpenAudio( 44100, MIX_DEFAULT_FORMAT, MIX_DEFAULT_CHANNELS, 4096 ) == -1 ) {
@@ -350,26 +353,26 @@ void cleanup_game(void) {
 /* Adds obstacle or food at random location in game board and renders it to background texture. */
 void seed_item(FieldType item_type)
 {
-    int x = 0, y = 0; /* coordinates */
+    int board_offs = 0; /* offset of field in game board */
+    int x = 0, y = 0; /* coordinates of field in game board */
     while(1) {
-        /* TODO: random number generator shall be seeded with unique value.
-                 Maybe I should consider also other generator than C stdlib */
-        x = rand() % game_board_w;
-        y = rand() % game_board_h;
-        if (game_board[game_board_w*y+x].type == Empty) {
-            game_board[game_board_w*y+x].type = item_type;
+        board_offs = pcg32_boundedrand(game_board_w*game_board_h);
+        if (game_board[board_offs].type == Empty) {
+            game_board[board_offs].type = item_type;
             /* render seeded wall to game board texture */
             if (item_type == Wall) {
+                x = board_offs % game_board_w;
+                y = board_offs / game_board_w;
                 SDL_Rect DstR = { x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE };
                 /* Redirect rendering to the game board texture */
                 SDL_SetRenderTarget(renderer, txt_game_board);
                 /* Copy wall tile */
-                SDL_RenderCopy(renderer, txt_env_tileset, &wall_tile[rand()%WALL_TILES], &DstR);
+                SDL_RenderCopy(renderer, txt_env_tileset, &wall_tile[pcg32_boundedrand(WALL_TILES)], &DstR);
                 /* Detach the game board texture from renderer */
                 SDL_SetRenderTarget(renderer, NULL);
             }
             else if (item_type == Food) {
-                game_board[game_board_w*y+x].p = rand()%FOOD_TILES;
+                game_board[board_offs].p = pcg32_boundedrand(FOOD_TILES);
             }
             break;
         }
@@ -442,7 +445,7 @@ void update_play_state(void)
             game_board[foff].ndy = game_board[foff].pdy = 0;
         }
         else { /* expand tail and seed new obstacle */
-            game_board[game_board_w*ty+tx].p = rand()%TOTAL_CHAR;
+            game_board[game_board_w*ty+tx].p = pcg32_boundedrand(TOTAL_CHAR);
             seed_item(Wall);
             expand_counter--;
             if (sfx_on) {
@@ -475,7 +478,7 @@ void start_play(void) {
     hx = tx = game_board_w/2;   hy = ty = game_board_h/2;
     /* seed first piece of snake */
     game_board[game_board_w*hy+hx].type = Snake;
-    game_board[game_board_w*hy+hx].p = rand()%TOTAL_CHAR;
+    game_board[game_board_w*hy+hx].p = pcg32_boundedrand(TOTAL_CHAR);
     game_board[game_board_w*hy+hx].ndx = dhx;
     game_board[game_board_w*hy+hx].ndy = dhy;
     game_board[game_board_w*hy+hx].pdx = -dhx;

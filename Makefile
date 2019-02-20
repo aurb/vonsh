@@ -1,6 +1,6 @@
 DEB = vonsh_0.0-1.deb
 PROGRAM = vonsh_0.0-1/usr/games/vonsh
-OBJS = vonsh.o text_renderer.o
+OBJS = vonsh.o text_renderer.o pcg_basic.o
 CC = gcc
 CFLAGS = -Wall -O3
 LDFLAGS = -lSDL2 -lSDL2main -lSDL2_image -lSDL2_mixer
