@@ -67,7 +67,7 @@ SDL_Rect *ground_tile = NULL;
 SDL_Rect *wall_tile = NULL;
 SDL_Rect *food_tile = NULL;
 BoardField *game_board = NULL;
-GameState game_state = NotStarted;
+GameState game_state = NotInitialized;
 
 int game_board_w=0, game_board_h=0; /* game board width and height (in full tiles)*/
 int screen_w=0, screen_h=0; /* game window width and height */
@@ -80,8 +80,8 @@ int new_record=0;     /* flag set if user beats previous record */
 int expand_counter=0; /* counter of snake segments to add and walls to seed */
 int ck_press=0;       /* control key pressed indicator */
 int frame=0;          /* animation frame */
-int music_on=0;
-int sfx_on=0;
+int music_on=1;       /* music enabled by default */
+int sfx_on=1;         /* sound effects enabled by default */
 
 const char *make_res_path(const char *filename) {
     sprintf(resource_path, "%s%s", resource_dir, filename);
@@ -310,9 +310,6 @@ int init_game(int gbw, int gbh) {
     /* Start animation frame timer. */
     game_timer = SDL_AddTimer(GAME_SPEED/CHAR_ANIM_FRAMES, tick_callback, 0);
     game_state = NotStarted;
-    hi_score = 0;
-    music_on = 1; /* music and sound effects enabled by default */
-    sfx_on = 1;
     return 0;
 }
 
@@ -683,14 +680,13 @@ int main(int argc, char ** argv)
     SDL_Event event;
 
     /* basic game configuration */
-    game_state = NotInitialized;
     if (init_game(1024/TILE_SIZE, 768/TILE_SIZE-1)) {
         /* Error during init. Terminating game. */
         cleanup_game();
         return 1;
     }
-
     render_screen();
+
     while (!quit)
     {
         SDL_WaitEvent(&event);

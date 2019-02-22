@@ -1,18 +1,22 @@
 DEB = vonsh_0.0-1.deb
-PROGRAM = vonsh_0.0-1/usr/games/vonsh
-OBJS = vonsh.o text_renderer.o pcg_basic.o
-CC = gcc
-CFLAGS = -Wall -O3
-LDFLAGS = -lSDL2 -lSDL2main -lSDL2_image -lSDL2_mixer
-all: $(DEB)
-clean:
-	rm $(DEB) $(PROGRAM) $(OBJS) vonsh_0.0-1/usr/share/doc/vonsh/*
+EXE = vonsh_0.0-1/usr/games/vonsh
+SRC_DIR = src
+OBJ_DIR = obj
+SRC = $(wildcard $(SRC_DIR)/*.c)
+OBJ = $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
+CFLAGS = -Iinclude -Wall -O3
+LDFLAGS =
+LDLIBS = -lSDL2 -lSDL2main -lSDL2_image -lSDL2_mixer
 .PHONY: all clean
-$(DEB): $(PROGRAM)
+all: $(EXE) $(DEB)
+$(DEB): $(EXE)
 	cp LICENSE vonsh_0.0-1/usr/share/doc/vonsh
 	cp README.md vonsh_0.0-1/usr/share/doc/vonsh
 	dpkg-deb --build vonsh_0.0-1/
-$(PROGRAM): $(OBJS)
-	$(CC) -o $@ $^ $(LDFLAGS)
-%.o: %.c
-	$(CC) $(CFLAGS) -c -o $@ $^
+$(EXE): $(OBJ)
+	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+clean:
+	$(RM) $(OBJ) $(EXE) $(DEB)
+	$(RM) -r vonsh_0.0-1/usr/share/doc/vonsh
