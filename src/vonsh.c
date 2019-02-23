@@ -1,13 +1,14 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_mixer.h>
+#include <unistd.h>
+#include <libgen.h>
 #include <time.h>
 #include "text_renderer.h"
 #include "pcg_basic.h"
 
-#define VERSION_STR "v0.0"
-const char *resource_dir = "/usr/share/games/vonsh/";
-char resource_path[100];
+#define VERSION_STR "v0.0" /* game version */
+#define RES_DIR "../share/games/vonsh/" /* resources directory */
 
 typedef enum e_GameState {
     NotInitialized,
@@ -83,11 +84,6 @@ int frame=0;          /* animation frame */
 int music_on=1;       /* music enabled by default */
 int sfx_on=1;         /* sound effects enabled by default */
 
-const char *make_res_path(const char *filename) {
-    sprintf(resource_path, "%s%s", resource_dir, filename);
-    return resource_path;
-}
-
 /* Callback for animation frame timer.
    Generates SDL_USEREVENT when main game loop shall render next frame. */
 uint32_t tick_callback(uint32_t interval, void *param) {
@@ -104,6 +100,17 @@ uint32_t tick_callback(uint32_t interval, void *param) {
 /* Clears game board and fills the background texture with random grass pattern.
    Executed at start of the game and at start of play.
  */
+
+/* TODO: building paths to reasources can be done by concatenating strings in preprocessor.
+         This would eliminate need for "file_path" buffer */
+#define FILE_PATH_SIZE 200
+static char file_path[FILE_PATH_SIZE]; /* resources path */
+/* build path(relative to CWD) to given filename located in resources directory */
+static const char *make_res_path(const char *filename) {
+    sprintf(file_path, "%s%s", RES_DIR, filename);
+    return file_path;
+}
+
 void init_game_board(void) {
     /* Reset the game board array */
     for (int i=0; i<game_board_w*game_board_h; i++) {
@@ -163,6 +170,7 @@ static int load_texture(SDL_Surface **srf, SDL_Texture **txt, const char *filena
     retval 1 - error during init. Program has to be terminated
  */
 int init_game(int gbw, int gbh) {
+
     /* game board dimensions(in full tiles) */
     game_board_w = gbw;
     game_board_h = gbh;
@@ -186,6 +194,18 @@ int init_game(int gbw, int gbh) {
         else if ((IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG) == 0) {
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
                 "SDL Image initialization error", IMG_GetError(), NULL);
+            return 1;
+        }
+        if (readlink("/proc/self/exe", file_path, FILE_PATH_SIZE) == -1) {
+            /* TODO: report precise cause of error */
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                "Work dir init error", "Error reading executable path", NULL);
+            return 1;
+        }
+        if (chdir(dirname(file_path)) == -1) {
+            /* TODO: report precise cause of error */
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                "Work dir init error", "Error setting current working directory", NULL);
             return 1;
         }
         pcg32_srandom(time(NULL), 0x12345678); /* seed random number generator */

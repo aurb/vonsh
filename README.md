@@ -1,26 +1,32 @@
 # Vonsh
-SDL-based snake game
+Snake game for Linux using SDL library.
 
 https://github.com/aurb/vonsh
 
 ## Depedencies
-Needed to run game:
+Necessary to run the game:
 + libsdl2
 + libsdl2-image
 + libsdl2-mixer
 
-Needed to build:
+Necessary to compile the game:
 + libsdl2-dev
 + libsdl2-image-dev
 + libsdl2-mixer-dev
 
 ## How to build and install
-make all; sudo dpkg -i vonsh_0.0-1.deb
+Compiling game and building installation package:
+> make all
+
+Installing from package:
+> sudo dpkg -i vonsh_0.0-1.deb
 
 ## How to play
-Call "vonsh".
+If game is installed from package - type "vonsh". If game is only compiled - run vonsh_0.0/usr/games/vonsh binary.
 Use arrow keys to move snake. Eat food, avoid obstacles and screen edges.
 SPACE to pause/unpause, ESC to quit.
+
+Music and sound effects can be toggled with Z and X.
 
 ## Authors
 ### Code
