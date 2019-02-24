@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <libgen.h>
 #include <time.h>
+#include <errno.h>
 #include "text_renderer.h"
 #include "pcg_basic.h"
 
@@ -101,16 +102,6 @@ uint32_t tick_callback(uint32_t interval, void *param) {
    Executed at start of the game and at start of play.
  */
 
-/* TODO: building paths to reasources can be done by concatenating strings in preprocessor.
-         This would eliminate need for "file_path" buffer */
-#define FILE_PATH_SIZE 200
-static char file_path[FILE_PATH_SIZE]; /* resources path */
-/* build path(relative to CWD) to given filename located in resources directory */
-static const char *make_res_path(const char *filename) {
-    sprintf(file_path, "%s%s", RES_DIR, filename);
-    return file_path;
-}
-
 void init_game_board(void) {
     /* Reset the game board array */
     for (int i=0; i<game_board_w*game_board_h; i++) {
@@ -148,10 +139,10 @@ void init_game_board(void) {
     retval 0 - texture loaded OK.
     retval 1 - texture not loaded
  */
-static int load_texture(SDL_Surface **srf, SDL_Texture **txt, const char *filename) {
-    if ((*srf = IMG_Load(make_res_path(filename))) == NULL) {
+static int load_texture(SDL_Surface **srf, SDL_Texture **txt, const char *filepath) {
+    if ((*srf = IMG_Load(filepath)) == NULL) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-            "Error loading image", make_res_path(filename), NULL);
+            "Error loading image", filepath, NULL);
         return 1;
     }
     else if ((*txt = SDL_CreateTextureFromSurface(renderer, *srf)) == NULL) {
@@ -196,13 +187,16 @@ int init_game(int gbw, int gbh) {
                 "SDL Image initialization error", IMG_GetError(), NULL);
             return 1;
         }
-        if (readlink("/proc/self/exe", file_path, FILE_PATH_SIZE) == -1) {
+        #define EXE_PATH_SIZE 200
+        char exe_path[EXE_PATH_SIZE]; /* resources path */
+        memset(exe_path, 0, EXE_PATH_SIZE);
+        if (readlink("/proc/self/exe", exe_path, EXE_PATH_SIZE) == -1) {
             /* TODO: report precise cause of error */
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
                 "Work dir init error", "Error reading executable path", NULL);
             return 1;
         }
-        if (chdir(dirname(file_path)) == -1) {
+        if (chdir(dirname(exe_path)) == -1) {
             /* TODO: report precise cause of error */
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
                 "Work dir init error", "Error setting current working directory", NULL);
@@ -217,24 +211,25 @@ int init_game(int gbw, int gbh) {
         return 1;
     }
     Mix_AllocateChannels(4);
-    if ((exp_chunk = Mix_LoadWAV(make_res_path("exp_sound.wav"))) == NULL) {
+
+    if ((exp_chunk = Mix_LoadWAV(RES_DIR"exp_sound.wav")) == NULL) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-            "Error loading sample", make_res_path("exp_sound.wav"), NULL);
+            "Error loading sample", RES_DIR"exp_sound.wav", NULL);
         return 1;
     }
-    if ((die_chunk = Mix_LoadWAV(make_res_path("die_sound.wav"))) == NULL) {
+    if ((die_chunk = Mix_LoadWAV(RES_DIR"die_sound.wav")) == NULL) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-            "Error loading sample", make_res_path("die_sound.wav"), NULL);
+            "Error loading sample", RES_DIR"die_sound.wav", NULL);
         return 1;
     }
-    if ((idle_music = Mix_LoadMUS(make_res_path("idle_tune.mp3"))) == NULL) {
+    if ((idle_music = Mix_LoadMUS(RES_DIR"idle_tune.mp3")) == NULL) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-            "Error loading music", make_res_path("idle_tune.mp3"), NULL);
+            "Error loading music", RES_DIR"idle_tune.mp3", NULL);
         return 1;
     }
-    if ((play_music = Mix_LoadMUS(make_res_path("play_tune.mp3"))) == NULL) {
+    if ((play_music = Mix_LoadMUS(RES_DIR"play_tune.mp3")) == NULL) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-            "Error loading music", make_res_path("play_tune.mp3"), NULL);
+            "Error loading music", RES_DIR"play_tune.mp3", NULL);
         return 1;
     }
 
@@ -270,12 +265,12 @@ int init_game(int gbw, int gbh) {
     /* Executed only at start of program */
     if (game_state == NotInitialized) {
         /* load textures */
-        if (load_texture(&srf_env_tileset, &txt_env_tileset, "board_tiles.png") ||
-            load_texture(&srf_food_tileset, &txt_food_tileset, "food_tiles.png") ||
-            load_texture(&srf_char_tileset, &txt_char_tileset, "character_tiles.png") ||
-            load_texture(&srf_font, &txt_font, "good_neighbors.png") ||
-            load_texture(&srf_logo, &txt_logo, "logo.png") ||
-            load_texture(&srf_trophy, &txt_trophy, "trophy-bronze.png")) {
+        if (load_texture(&srf_env_tileset, &txt_env_tileset, RES_DIR"board_tiles.png") ||
+            load_texture(&srf_food_tileset, &txt_food_tileset, RES_DIR"food_tiles.png") ||
+            load_texture(&srf_char_tileset, &txt_char_tileset, RES_DIR"character_tiles.png") ||
+            load_texture(&srf_font, &txt_font, RES_DIR"good_neighbors.png") ||
+            load_texture(&srf_logo, &txt_logo, RES_DIR"logo.png") ||
+            load_texture(&srf_trophy, &txt_trophy, RES_DIR"trophy-bronze.png")) {
             /* loading of any of the textures failed */
             return 1;
         }
