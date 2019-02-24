@@ -8,7 +8,10 @@
 #include "text_renderer.h"
 #include "pcg_basic.h"
 
-#define VERSION_STR "v0.0" /* game version */
+#define WINDOW_TITLE "Vonsh" /* window title string */
+#define WINDOW_W 900 /* windowed mode resolution */
+#define WINDOW_H 700
+#define VERSION_STR "v0.0" /* game version string */
 #define RES_DIR "../share/games/vonsh/" /* resources directory */
 
 typedef enum e_GameState {
@@ -73,6 +76,7 @@ GameState game_state = NotInitialized;
 
 int game_board_w=0, game_board_h=0; /* game board width and height (in full tiles)*/
 int screen_w=0, screen_h=0; /* game window width and height */
+int fullscreen=0;     /* 1: full screen mode, 0: windowed mode */
 int dhx=0, dhy=0;     /* head movement direction */
 int hx=0, hy=0;       /* head coordinates */
 int tx=0, ty=0;       /* tail coordinates */
@@ -160,15 +164,7 @@ static int load_texture(SDL_Surface **srf, SDL_Texture **txt, const char *filepa
     retval 0 - initialization OK.
     retval 1 - error during init. Program has to be terminated
  */
-int init_game(int gbw, int gbh) {
-
-    /* game board dimensions(in full tiles) */
-    game_board_w = gbw;
-    game_board_h = gbh;
-    /* game screen dimensions */
-    screen_w = game_board_w*TILE_SIZE;
-    /* bottom TILE_SIZE pixels is used for displaying score*/
-    screen_h = (game_board_h+1)*TILE_SIZE;
+int init_game(int sw, int sh, int fullscreen) {
 
     /* Executed only at start of program */
     if (game_state == NotInitialized) {
@@ -203,59 +199,101 @@ int init_game(int gbw, int gbh) {
             return 1;
         }
         pcg32_srandom(time(NULL), 0x12345678); /* seed random number generator */
+        if( Mix_OpenAudio( 44100, MIX_DEFAULT_FORMAT, MIX_DEFAULT_CHANNELS, 4096 ) == -1 ) {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                "Error opening audio device", Mix_GetError(), NULL);
+            return 1;
+        }
+        Mix_AllocateChannels(4);
+
+        if ((exp_chunk = Mix_LoadWAV(RES_DIR"exp_sound.wav")) == NULL) {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                "Error loading sample", RES_DIR"exp_sound.wav", NULL);
+            return 1;
+        }
+        if ((die_chunk = Mix_LoadWAV(RES_DIR"die_sound.wav")) == NULL) {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                "Error loading sample", RES_DIR"die_sound.wav", NULL);
+            return 1;
+        }
+        if ((idle_music = Mix_LoadMUS(RES_DIR"idle_tune.mp3")) == NULL) {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                "Error loading music", RES_DIR"idle_tune.mp3", NULL);
+            return 1;
+        }
+        if ((play_music = Mix_LoadMUS(RES_DIR"play_tune.mp3")) == NULL) {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                "Error loading music", RES_DIR"play_tune.mp3", NULL);
+            return 1;
+        }
     }
 
-    if( Mix_OpenAudio( 44100, MIX_DEFAULT_FORMAT, MIX_DEFAULT_CHANNELS, 4096 ) == -1 ) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-            "Error opening audio device", Mix_GetError(), NULL);
-        return 1;
-    }
-    Mix_AllocateChannels(4);
+    /* If fullscreen mode was selected, then set game window resolution to current desktop resolution and set
+       game board dimensions accordingly */
+    if (fullscreen) {
+        if (game_state == NotInitialized) {
+            if ((screen = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_CENTERED,
+                         SDL_WINDOWPOS_CENTERED, 0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP)) == NULL) {
+                SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                    "SDL window not created", SDL_GetError(), NULL);
+                return 1;
+            }
+        }
+        else {
+            SDL_SetWindowFullscreen(screen, SDL_WINDOW_FULLSCREEN_DESKTOP);
+        }
+        SDL_GetWindowSize(screen, &screen_w, &screen_h);
 
-    if ((exp_chunk = Mix_LoadWAV(RES_DIR"exp_sound.wav")) == NULL) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-            "Error loading sample", RES_DIR"exp_sound.wav", NULL);
-        return 1;
+        game_board_w = screen_w/TILE_SIZE;
+        game_board_h = screen_h/TILE_SIZE - 1;
     }
-    if ((die_chunk = Mix_LoadWAV(RES_DIR"die_sound.wav")) == NULL) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-            "Error loading sample", RES_DIR"die_sound.wav", NULL);
-        return 1;
-    }
-    if ((idle_music = Mix_LoadMUS(RES_DIR"idle_tune.mp3")) == NULL) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-            "Error loading music", RES_DIR"idle_tune.mp3", NULL);
-        return 1;
-    }
-    if ((play_music = Mix_LoadMUS(RES_DIR"play_tune.mp3")) == NULL) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-            "Error loading music", RES_DIR"play_tune.mp3", NULL);
-        return 1;
+    /* If window mode was selected, then set game window to selected resolution and
+       set game board dimensions accordingly */
+    else {
+        /* game board dimensions(in full tiles) */
+        game_board_w = sw/TILE_SIZE;
+        game_board_h = sh/TILE_SIZE - 1;
+        /* game screen dimensions */
+        screen_w = game_board_w*TILE_SIZE;
+        /* bottom TILE_SIZE pixels is used for displaying score*/
+        screen_h = (game_board_h+1)*TILE_SIZE;
+
+        if (game_state == NotInitialized) {
+            if ((screen = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_CENTERED,
+                         SDL_WINDOWPOS_CENTERED, screen_w, screen_h, 0)) == NULL) {
+                SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                    "SDL window not created", SDL_GetError(), NULL);
+                return 1;
+            }
+        }
+        else {
+            SDL_SetWindowFullscreen(screen, 0);
+            SDL_SetWindowSize(screen, screen_w, screen_h);
+            SDL_SetWindowPosition(screen, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+        }
     }
 
-    /* TODO: Adjust below paragraph to support in-game screen resolution changes */
-    if ((screen = SDL_CreateWindow("Vonsh", SDL_WINDOWPOS_CENTERED,
-                 SDL_WINDOWPOS_CENTERED, screen_w, screen_h, 0)) == NULL) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-            "SDL window not created", SDL_GetError(), NULL);
-        return 1;
+    if (game_state == NotInitialized) {
+        if ((renderer = SDL_CreateRenderer(screen, -1,
+                       SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE)) == NULL) {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                "SDL renderer not created", SDL_GetError(), NULL);
+            return 1;
+        }
     }
-    else if ((renderer = SDL_CreateRenderer(screen, -1,
-                   SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE)) == NULL) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-            "SDL renderer not created", SDL_GetError(), NULL);
-        return 1;
+    if (game_state != NotInitialized) {
+        /* when switching window resolution release previously created game board texture */
+        SDL_DestroyTexture(txt_game_board);
+        /* free previously allocated game board array */
+        free(game_board);
     }
-    /* texture for rendering game background with obstacles */
-    else if ((txt_game_board = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+    if ((txt_game_board = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
                         SDL_TEXTUREACCESS_TARGET, screen_w, screen_h)) == NULL) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
             "Error creating background texture", SDL_GetError(), NULL);
         return 1;
     }
-    if (game_board != NULL) {
-        free(game_board);
-    }
+
     if ((game_board = calloc(game_board_w*game_board_h, sizeof(BoardField))) == NULL) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
             "Error", "Error allocating memory", NULL);
@@ -322,8 +360,10 @@ int init_game(int gbw, int gbh) {
     init_text_renderer(renderer, txt_font);
     /* Reset game board and generate new background texture. */
     init_game_board();
-    /* Start animation frame timer. */
-    game_timer = SDL_AddTimer(GAME_SPEED/CHAR_ANIM_FRAMES, tick_callback, 0);
+    if (game_state == NotInitialized) {
+        /* Start animation frame timer. */
+        game_timer = SDL_AddTimer(GAME_SPEED/CHAR_ANIM_FRAMES, tick_callback, 0);
+    }
     game_state = NotStarted;
     return 0;
 }
@@ -500,7 +540,10 @@ void start_play(void) {
     frame = 0;
     new_record = 0;
     game_state = Playing;
-    /* TODO: music shall start from beginning after new  */
+    /* TODO: 1. "play tune" shall start from beginning after new game is started
+             2. After game over, for short moment when "die" sound is played,
+                "play tune" is played, but it should be already "idle tune", or
+                better no tune */
     Mix_PlayMusic(play_music, -1);
     if (!music_on) {
         Mix_PauseMusic();
@@ -532,7 +575,7 @@ void render_screen(void)
     SDL_Rect DstR = { 0, 0, TILE_SIZE, TILE_SIZE };
     SDL_Rect SrcR = { 0, 0, TILE_SIZE, TILE_SIZE };
     char bottom_string[15];
-    int char_frame = 0; 
+    int char_frame = 0;
     int img_w, img_h;
     /* render game backround with walls */
     SDL_RenderCopy(renderer, txt_game_board, NULL, NULL);
@@ -609,7 +652,7 @@ void render_screen(void)
             /* "First start" screen */
             SDL_QueryTexture(txt_logo, NULL, NULL, &img_w, &img_h);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);
-            DstR.w = 16*TILE_SIZE;        DstR.h = (2+7.5)*TILE_SIZE+img_h;
+            DstR.w = 16*TILE_SIZE;        DstR.h = (2+8.5)*TILE_SIZE+img_h;
             yc = (screen_h-TILE_SIZE-DstR.h)/2;
             DstR.x = (screen_w-DstR.w)/2; DstR.y = yc;
             SDL_RenderFillRect(renderer, &DstR);
@@ -626,15 +669,17 @@ void render_screen(void)
             render_text(screen_w/2-32, yc+TILE_SIZE,   Right, "SPACE:");
             render_text(screen_w/2-32, yc+2*TILE_SIZE, Right, "Z:");
             render_text(screen_w/2-32, yc+3*TILE_SIZE, Right, "X:");
-            render_text(screen_w/2-32, yc+4*TILE_SIZE, Right, "ESC:");
+            render_text(screen_w/2-32, yc+4*TILE_SIZE, Right, "S:");
+            render_text(screen_w/2-32, yc+5*TILE_SIZE, Right, "ESC:");
             SET_GREY_TEXT;
             render_text(screen_w/2-32, yc,             Left, " Snake control");
             render_text(screen_w/2-32, yc+TILE_SIZE,   Left, " Pause/Resume");
             render_text(screen_w/2-32, yc+2*TILE_SIZE, Left, " Music");
             render_text(screen_w/2-32, yc+3*TILE_SIZE, Left, " Sound effects");
-            render_text(screen_w/2-32, yc+4*TILE_SIZE, Left, " Quit");
+            render_text(screen_w/2-32, yc+4*TILE_SIZE, Left, " Window/Full");
+            render_text(screen_w/2-32, yc+5*TILE_SIZE, Left, " Quit");
             SET_WHITE_TEXT;
-            render_text(screen_w/2,    yc+5.5*TILE_SIZE, Center, "Press SPACE to play");
+            render_text(screen_w/2,    yc+6.5*TILE_SIZE, Center, "Press SPACE to play");
             break;
         case GameOver:
             /* "Game Over" screen */
@@ -674,16 +719,17 @@ void render_screen(void)
     }
     /* print score, hi score and music/sound effects state*/
     SET_WHITE_TEXT;
-    sprintf(bottom_string, "SCORE: %d", score);
-    render_text(TILE_SIZE, screen_h-TILE_SIZE, Left, bottom_string);
     sprintf(bottom_string, "HI SCORE: %d", hi_score);
-    render_text(screen_w-TILE_SIZE, screen_h-TILE_SIZE, Right, bottom_string);
+    render_text(TILE_SIZE, game_board_h*TILE_SIZE, Left, bottom_string);
+    sprintf(bottom_string, "SCORE: %d", score);
+    render_text(screen_w-TILE_SIZE, game_board_h*TILE_SIZE, Right, bottom_string);
     SET_GREY_TEXT;
-    sprintf(bottom_string, "Music %s  ", music_on ? "ON " : "OFF");
-    render_text(screen_w/2, screen_h-TILE_SIZE, Right, bottom_string);
-    sprintf(bottom_string, "   SFX %s", sfx_on ? "ON" : "OFF");
-    render_text(screen_w/2, screen_h-TILE_SIZE, Left, bottom_string);
-
+    if (music_on) {
+        render_text(screen_w/2, game_board_h*TILE_SIZE, Right, "Music ");
+    }
+    if (sfx_on) {
+        render_text(screen_w/2, game_board_h*TILE_SIZE, Left, "  SFX");
+    }
     SDL_RenderPresent(renderer);
 }
 
@@ -695,12 +741,13 @@ int main(int argc, char ** argv)
     SDL_Event event;
 
     /* basic game configuration */
-    if (init_game(1024/TILE_SIZE, 768/TILE_SIZE-1)) {
+    if (init_game(WINDOW_W, WINDOW_H, fullscreen)) {
         /* Error during init. Terminating game. */
-        cleanup_game();
-        return 1;
+        quit = 1;
     }
-    render_screen();
+    else {
+        render_screen();
+    }
 
     while (!quit)
     {
@@ -752,6 +799,7 @@ int main(int argc, char ** argv)
                     }
                 }
                 else if (event.key.keysym.sym == SDLK_z && event.key.repeat == 0) {
+                    /* toggle music on/off */
                     music_on = !music_on;
                     render_screen();
                     if (game_state != Paused) {
@@ -764,8 +812,21 @@ int main(int argc, char ** argv)
                     }
                 }
                 else if (event.key.keysym.sym == SDLK_x && event.key.repeat == 0) {
+                    /* toggle sound effects on/off */
                     sfx_on = !sfx_on;
                     render_screen();
+                }
+                else if (event.key.keysym.sym == SDLK_s && event.key.repeat == 0 &&
+                        (game_state == NotStarted || game_state == NotInitialized)) {
+                    /* toggle display between windowed/fullscreen modes */
+                    fullscreen = !fullscreen;
+                    if (init_game(WINDOW_W, WINDOW_H, fullscreen)) {
+                        quit = 1;
+                    }
+                    else {
+                        SDL_Delay(50);
+                        render_screen();
+                    }
                 }
                 else if (game_state == Playing && event.key.repeat == 0 && ck_press == 0) {
                     switch (event.key.keysym.sym) {
