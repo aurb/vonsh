@@ -45,6 +45,7 @@ typedef struct BoardField {
 #define FOOD_TILES 6
 #define TOTAL_CHAR 24
 #define CHAR_ANIM_FRAMES 4
+#define FOOD_BLINK_T 27
 SDL_Window *screen = NULL;
 SDL_Renderer *renderer = NULL;
 SDL_Texture *txt_game_board = NULL;
@@ -52,6 +53,8 @@ SDL_Surface *srf_env_tileset = NULL;
 SDL_Texture *txt_env_tileset = NULL;
 SDL_Surface *srf_food_tileset = NULL;
 SDL_Texture *txt_food_tileset = NULL;
+SDL_Surface *srf_food_marker = NULL;
+SDL_Texture *txt_food_marker = NULL;
 SDL_Surface *srf_char_tileset = NULL;
 SDL_Texture *txt_char_tileset = NULL;
 SDL_Surface *srf_font = NULL;
@@ -305,11 +308,17 @@ int init_game(int sw, int sh, int fullscreen) {
         /* load textures */
         if (load_texture(&srf_env_tileset, &txt_env_tileset, RES_DIR"board_tiles.png") ||
             load_texture(&srf_food_tileset, &txt_food_tileset, RES_DIR"food_tiles.png") ||
+            load_texture(&srf_food_marker, &txt_food_marker, RES_DIR"food_marker.png") ||
             load_texture(&srf_char_tileset, &txt_char_tileset, RES_DIR"character_tiles.png") ||
             load_texture(&srf_font, &txt_font, RES_DIR"good_neighbors.png") ||
             load_texture(&srf_logo, &txt_logo, RES_DIR"logo.png") ||
             load_texture(&srf_trophy, &txt_trophy, RES_DIR"trophy-bronze.png")) {
             /* loading of any of the textures failed */
+            return 1;
+        }
+
+        /* set blending mode for food marker*/
+        if (SDL_SetTextureBlendMode(txt_food_marker, SDL_BLENDMODE_ADD)) {
             return 1;
         }
 
@@ -381,6 +390,7 @@ void cleanup_game(void) {
     SDL_DestroyTexture(txt_char_tileset);
     SDL_DestroyTexture(txt_env_tileset);
     SDL_DestroyTexture(txt_food_tileset);
+    SDL_DestroyTexture(txt_food_marker);
     SDL_DestroyTexture(txt_game_board);
 
     SDL_FreeSurface(srf_trophy);
@@ -389,6 +399,7 @@ void cleanup_game(void) {
     SDL_FreeSurface(srf_char_tileset);
     SDL_FreeSurface(srf_env_tileset);
     SDL_FreeSurface(srf_food_tileset);
+    SDL_FreeSurface(srf_food_marker);
 
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(screen);
@@ -634,8 +645,24 @@ void render_screen(void)
                 case Food:
                     DstR.x = x*TILE_SIZE;
                     DstR.y = y*TILE_SIZE;
-                    SDL_RenderCopy(renderer, txt_food_tileset,
-                                   &food_tile[game_board[foff].p], &DstR);
+                    /* blink food item during gameplay */
+                    if (game_state == Playing && frame % (FOOD_BLINK_T*3) < FOOD_BLINK_T) {
+                        if ((frame/3) % 3 == 0) {
+                            SDL_RenderCopy(renderer, txt_food_marker, NULL, &DstR);
+                        }
+                        else if ((frame/3) % 3 == 1) {
+                            SDL_RenderCopy(renderer, txt_food_tileset,
+                                           &food_tile[game_board[foff].p], &DstR);
+                        }
+                        else {
+                            /* don't render anything */
+                        };
+                    }
+                    /* don't blink, just render the food */
+                    else {
+                        SDL_RenderCopy(renderer, txt_food_tileset,
+                                       &food_tile[game_board[foff].p], &DstR);
+                    }
                     break;
                 default:
                     break;
