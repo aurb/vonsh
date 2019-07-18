@@ -4,7 +4,7 @@ OBJ_DIR = obj
 EXE_DIR = vonsh_0.0-1/usr/games
 DOC_DIR = vonsh_0.0-1/usr/share/doc
 DEB = vonsh_0.0-1.deb
-EXE = vonsh_0.0-1/usr/games/vonsh
+EXE = $(EXE_DIR)/vonsh
 SRC = $(wildcard $(SRC_DIR)/*.c)
 OBJ = $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 CFLAGS = -I$(INC_DIR) -Wall -O3
