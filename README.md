@@ -5,9 +5,9 @@ https://github.com/aurb/vonsh
 
 ## Depedencies
 Necessary to run the game:
-+ libsdl2
-+ libsdl2-image
-+ libsdl2-mixer
++ libsdl2-2.0-0
++ libsdl2-image-2.0-0
++ libsdl2-mixer-2.0-0
 
 Necessary to compile the game:
 + libsdl2-dev
