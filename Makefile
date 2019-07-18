@@ -16,6 +16,7 @@ $(DEB): $(EXE)
 $(EXE): $(OBJ)
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	mkdir -p $(OBJ_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 clean:
 	$(RM) $(OBJ) $(EXE) $(DEB)
