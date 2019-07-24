@@ -190,13 +190,11 @@ int init_game(int sw, int sh, int fullscreen) {
         char exe_path[EXE_PATH_SIZE]; /* resources path */
         memset(exe_path, 0, EXE_PATH_SIZE);
         if (readlink("/proc/self/exe", exe_path, EXE_PATH_SIZE) == -1) {
-            /* TODO: report precise cause of error */
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
                 "Work dir init error", "Error reading executable path", NULL);
             return 1;
         }
         if (chdir(dirname(exe_path)) == -1) {
-            /* TODO: report precise cause of error */
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
                 "Work dir init error", "Error setting current working directory", NULL);
             return 1;
@@ -362,7 +360,7 @@ int init_game(int sw, int sh, int fullscreen) {
             food_tile[i].w = food_tile[i].h = TILE_SIZE;
         }
 
-        Mix_PlayMusic(idle_music, -1); /* TODO: might fail - shall we handle this? */
+        if (Mix_PlayMusic(idle_music, -1) == -1) {} /* TODO: might fail - shall we handle this? */
     }
 
     /* init text rendering functionality */
@@ -378,6 +376,10 @@ int init_game(int sw, int sh, int fullscreen) {
 }
 
 void cleanup_game(void) {
+    Mix_HaltMusic();     /* stop music playback */
+    Mix_HaltChannel(-1); /* stop all audio channels playback */
+    Mix_FreeMusic(idle_music);
+    Mix_FreeMusic(play_music);
     Mix_FreeChunk(exp_chunk);
     Mix_FreeChunk(die_chunk);
     Mix_CloseAudio();
@@ -513,7 +515,7 @@ void update_play_state(void)
             expand_counter--;
             if (sfx_on) {
                 Mix_VolumeChunk(exp_chunk, MIX_MAX_VOLUME/3);
-                Mix_PlayChannel(-1, exp_chunk, 0); /* TODO: might fail - shall we handle this? */
+                if (Mix_PlayChannel(-1, exp_chunk, 0) == -1) {} /* TODO: might fail - shall we handle this? */
             }
         }
         ck_press = 0; /* allow new control key press */
@@ -521,10 +523,9 @@ void update_play_state(void)
     else if (game_state == GameOver) {
         if (sfx_on) {
             Mix_VolumeChunk(die_chunk, MIX_MAX_VOLUME/3);
-            Mix_PlayChannel(-1, die_chunk, 0); /* TODO: might fail - shall we handle this? */
+            if (Mix_PlayChannel(-1, die_chunk, 0) == -1) {} /* TODO: might fail - shall we handle this? */
         }
-        /* TODO: music shall start from beginning after starting game */
-        Mix_PlayMusic(idle_music, -1); /* TODO: might fail - shall we handle this? */
+        if (Mix_PlayMusic(idle_music, -1) == -1) {} /* TODO: might fail - shall we handle this? */
         if (!music_on) {
             Mix_PauseMusic();
         }
@@ -551,11 +552,7 @@ void start_play(void) {
     frame = 0;
     new_record = 0;
     game_state = Playing;
-    /* TODO: 1. "play tune" shall start from beginning after new game is started
-             2. After game over, for short moment when "die" sound is played,
-                "play tune" is played, but it should be already "idle tune", or
-                better no tune */
-    Mix_PlayMusic(play_music, -1);
+    if (Mix_PlayMusic(play_music, -1) == -1) {} /* TODO: might fail - shall we handle this? */
     if (!music_on) {
         Mix_PauseMusic();
     }
