@@ -7,11 +7,15 @@ DEB = vonsh_0.0-1.deb
 EXE = $(EXE_DIR)/vonsh
 SRC = $(wildcard $(SRC_DIR)/*.c)
 OBJ = $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
-CFLAGS = -I$(INC_DIR) -Wall -O3
+CFLAGS = -I$(INC_DIR) -Wall
 LDFLAGS =
 LDLIBS = -lSDL2 -lSDL2main -lSDL2_image -lSDL2_mixer
 .PHONY: all clean
-all: $(EXE) $(DEB)
+all: clean release $(DEB)
+release: CFLAGS += -O3
+release: $(EXE)
+debug: CFLAGS += -g
+debug: $(EXE)
 $(DEB): $(EXE)
 	mkdir -p $(DOC_DIR)/vonsh
 	cp LICENSE README.md $(DOC_DIR)/vonsh

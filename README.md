@@ -15,8 +15,17 @@ Necessary to compile the game:
 + libsdl2-mixer-dev
 
 ## How to build and install
-Compiling game and building installation package:
+Full rebuild of release executable vonsh_0.0-1/usr/games/vonsh and installation package vonsh_0.0-1.deb:
 > make all
+
+Build debug executable(optimization OFF, debug symbols ON) vonsh_0.0-1/usr/games/vonsh:
+> make debug
+
+Build release executable(optimization ON, debug symbols OFF) vonsh_0.0-1/usr/games/vonsh:
+> make release
+
+Clean project:
+> make clean
 
 Installing from package:
 > sudo dpkg -i vonsh_0.0-1.deb
