@@ -11,7 +11,6 @@
 #define WINDOW_TITLE "Vonsh" /* window title string */
 #define WINDOW_W 900 /* windowed mode resolution */
 #define WINDOW_H 700
-#define VERSION_STR "v0.0" /* game version string */
 #define RES_DIR "../share/games/vonsh/" /* resources directory */
 
 typedef enum e_GameState {
@@ -686,7 +685,7 @@ void render_screen(void)
             SDL_RenderCopy(renderer, txt_logo, NULL, &DstR);
             yc += img_h;
             SET_GREY_TEXT;
-            render_text(screen_w/2,    yc,             Center, VERSION_STR);
+            render_text(screen_w/2,    yc,             Center, "v"VERSION_STR);
             yc += TILE_SIZE;
             SET_YELLOW_TEXT;
             render_text(screen_w/2-32, yc,             Right, "Arrows:");
