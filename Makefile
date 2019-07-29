@@ -16,6 +16,7 @@ LDLIBS = -lSDL2 -lSDL2main -lSDL2_image -lSDL2_mixer
 all: clean release $(DEB)
 release: CFLAGS += -O3
 release: $(EXE)
+	strip --strip-all $^
 debug: CFLAGS += -g
 debug: $(EXE)
 $(DEB): $(EXE)
