@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+
+clean:
+	$(RM) -rf debian/vonsh
+	make clean
+
+build:
+	make
+
+binary:
+	mkdir -p debian/vonsh
+	make install DESTDIR=debian/vonsh
+	dh_makeshlibs
+	dh_gencontrol
+	dh_builddeb

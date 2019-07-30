@@ -1,9 +1,0 @@
-Package: vonsh
-Version: 0.0-1
-Section: games
-Priority: optional
-Architecture: amd64
-Depends: libsdl2-2.0-0 (>= 2.0-0), libsdl2-image-2.0-0 (>=2.0-0), libsdl2-mixer-2.0-0 (>=2.0-0)
-Maintainer: Andrzej Urbaniak <aurb@users.noreply.github.com>
-Description: Another snake game
- Lead your friends to get more food!

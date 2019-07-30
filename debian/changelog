@@ -1,0 +1,5 @@
+vonsh (0.0-1) buster; urgency=medium
+
+  * Initial dpkg-buildpackage work.
+
+ -- Andrzej Urbaniak <aurb@users.noreply.github.com>  Mon, 29 Jul 2019 12:13:43 +0200
