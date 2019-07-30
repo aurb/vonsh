@@ -4,31 +4,33 @@ Snake game for Linux using SDL library.
 https://github.com/aurb/vonsh
 
 ## Depedencies
-Necessary to run the game:
-+ libsdl2-2.0-0
-+ libsdl2-image-2.0-0
-+ libsdl2-mixer-2.0-0
+Package dependencies:
++ libc6 (>= 2.2.5)
++ libsdl2-2.0-0 (>= 2.0.9)
++ libsdl2-image-2.0-0 (>= 2.0.2)
++ libsdl2-mixer-2.0-0 (>= 2.0.2)
 
-Necessary to compile the game:
-+ libsdl2-dev
-+ libsdl2-image-dev
-+ libsdl2-mixer-dev
+Build dependencies:
++ build-essential
++ debhelper (>= 9)
++ libsdl2-dev (>=2.0.9)
++ libsdl2-image-dev (>=2.0.4)
++ libsdl2-mixer-dev (>=2.0.4)
 
 ## How to build and install
-Full rebuild of release executable **vonsh_0.0-1/usr/games/vonsh** and installation package **vonsh_0.0-1.deb**:
-> make all
+Commands to be executed from project root directory:
 
-Build debug executable(optimization OFF, debug symbols ON) **vonsh_0.0-1/usr/games/vonsh**:
-> make debug
-
-Build release executable(optimization ON, debug symbols OFF) **vonsh_0.0-1/usr/games/vonsh**:
+To build release executable(optimization ON, debug symbols OFF) **usr/games/vonsh**:
 > make release
 
-Clean project:
+To build debug executable(optimization OFF, debug symbols ON) **usr/games/vonsh**:
+> make debug
+
+To clean project:
 > make clean
 
-Installing from package:
-> sudo dpkg -i vonsh_0.0-1.deb
+To build Debian installation package **../vonsh_x.y-z_arch.deb**:
+> dpkg-buildpackage -b -uc
 
 ## How to play
 If game is installed from package - type "vonsh". If game is only compiled - run vonsh_0.0/usr/games/vonsh binary.
