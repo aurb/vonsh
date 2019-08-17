@@ -1,0 +1,44 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: vonsh
+Upstream-Contact: Andrzej Urbaniak <andrzeju@fakemail.com>
+Source: https://github.com/aurb/vonsh/archive/master.zip
+
+Files: *
+Copyright: 2019 Andrzej Urbaniak <andrzeju@fakemail.com>
+License: MIT
+
+Files: inc/pcg_basic.h src/pcg_basic.c
+Copyright: 2014 Melissa O'Neill <oneill@pcg-random.org>
+License: Apache License, Version 2.0
+
+Files: usr/share/games/vonsh/board_tiles.png
+Copyright: 2018 Beast
+License: CC0 1.0
+
+Files: usr/share/games/vonsh/food_tiles.png
+Copyright: 2016 Henry Software
+License: CC0 1.0
+
+Files: usr/share/games/vonsh/character_tiles.png
+Copyright: 2017 Fleurman
+License: CC0 1.0
+
+Files: usr/share/games/vonsh/good_neighbors.png
+Copyright: 2015 Clint Bellanger
+License: CC0 1.0
+
+Files: usr/share/games/vonsh/trophy-bronze.png
+Copyright: 2014 Yevhen Danchenko
+License: CC0 1.0
+
+Files: usr/share/games/vonsh/die_sound.wav usr/share/games/vonsh/exp_sound.wav 
+Copyright: 2014 Damaged Panda
+License: CC BY 3.0
+
+Files: usr/share/games/vonsh/idle_tune.mp3
+Copyright: Juhani Junkala 
+License: CC0 1.0
+
+Files: usr/share/games/vonsh/play_tune.mp3
+Copyright: Przemyslaw Sikorski
+License: CC BY 3.0
