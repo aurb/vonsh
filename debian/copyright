@@ -1,10 +1,10 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: vonsh
-Upstream-Contact: Andrzej Urbaniak <andrzeju@fakemail.com>
-Source: https://github.com/aurb/vonsh/archive/master.zip
+Upstream-Contact: Andrzej Urbaniak <urbaniak256@gmail.com>
+Source: https://github.com/aurb/vonsh/
 
 Files: *
-Copyright: 2019 Andrzej Urbaniak <andrzeju@fakemail.com>
+Copyright: 2019 Andrzej Urbaniak
 License: MIT
 
 Files: inc/pcg_basic.h src/pcg_basic.c
@@ -36,9 +36,9 @@ Copyright: 2014 Damaged Panda
 License: CC BY 3.0
 
 Files: usr/share/games/vonsh/idle_tune.mp3
-Copyright: Juhani Junkala 
+Copyright: 2016 Juhani Junkala 
 License: CC0 1.0
 
 Files: usr/share/games/vonsh/play_tune.mp3
-Copyright: Przemyslaw Sikorski
+Copyright: 2013 Przemyslaw Sikorski
 License: CC BY 3.0

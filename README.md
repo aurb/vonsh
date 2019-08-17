@@ -1,7 +1,7 @@
 # Vonsh
-Snake game for Linux using SDL library.
+Snake-like game for Linux using SDL library.
 
-https://github.com/aurb/vonsh
+https://github.com/aurb/vonsh/
 
 ## Depedencies
 Package dependencies:
@@ -58,4 +58,43 @@ Music and sound effects can be toggled with Z and X.
 Music licensed under CC-BY 3.0 https://creativecommons.org/licenses/by/3.0/
 
 ## License
-For licenses see LICENSE file.
+PCG Random Number Generation
+Files: inc/pcg_basic.h src/pcg_basic.c
+Copyright: 2014 Melissa O'Neill <oneill@pcg-random.org>
+License: Apache License, Version 2.0
+
+File: usr/share/games/vonsh/board_tiles.png
+Copyright: 2018 Beast
+License: CC0 1.0
+
+File: usr/share/games/vonsh/food_tiles.png
+Copyright: 2016 Henry Software
+License: CC0 1.0
+
+File: usr/share/games/vonsh/character_tiles.png
+Copyright: 2017 Fleurman
+License: CC0 1.0
+
+File: usr/share/games/vonsh/good_neighbors.png
+Copyright: 2015 Clint Bellanger
+License: CC0 1.0
+
+File: usr/share/games/vonsh/trophy-bronze.png
+Copyright: 2014 Yevhen Danchenko
+License: CC0 1.0
+
+Files: usr/share/games/vonsh/die_sound.wav usr/share/games/vonsh/exp_sound.wav 
+Copyright: 2014 Damaged Panda
+License: CC BY 3.0
+
+File: usr/share/games/vonsh/idle_tune.mp3
+Copyright: 2016 Juhani Junkala 
+License: CC0 1.0
+
+Files: usr/share/games/vonsh/play_tune.mp3
+Copyright: 2013 Przemyslaw Sikorski
+License: CC BY 3.0
+
+All files not mentioned above:
+Copyright: 2019 Andrzej Urbaniak
+License: MIT

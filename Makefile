@@ -1,4 +1,4 @@
-VERSION = 0.0
+VERSION = 1.0
 INC_DIR = inc
 SRC_DIR = src
 OBJ_DIR = obj
@@ -28,4 +28,4 @@ clean:
 install:
 	cp -R usr $(DESTDIR)/
 	mkdir -p $(DESTDIR)/usr/share/doc/vonsh
-	cp LICENSE README.md $(DESTDIR)/usr/share/doc/vonsh/
+	cp README.md $(DESTDIR)/usr/share/doc/vonsh/

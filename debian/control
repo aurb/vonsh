@@ -1,12 +1,15 @@
 Source: vonsh
 Section: games
 Priority: optional
-Maintainer: Andrzej Urbaniak <aurb@users.noreply.github.com>
+Maintainer: Andrzej Urbaniak <urbaniak256@gmail.com>
 Build-Depends: build-essential, debhelper (>= 9), libsdl2-dev (>=2.0.9), libsdl2-image-dev (>=2.0.4), libsdl2-mixer-dev (>=2.0.4)
-Homepage: https://github.com/aurb/vonsh
+Homepage: https://github.com/aurb/vonsh/
 
 Package: vonsh
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Another snake game
- Lead your friends to get more food!
+Description: Snake-like game with line of people running around to get more food
+ Player has to pick up foodstuffs appearing randomly on the board,
+ and avoid colliding with obstacles and the line itself. With each picked up
+ food item, line grows in length, new obstacles appear,
+ and difficulty explodes ;). Game is based on libSDL.
