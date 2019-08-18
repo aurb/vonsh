@@ -7,12 +7,12 @@ EXE_DIR = $(BUILD_DIR)/games
 SRC = $(wildcard $(SRC_DIR)/*.c)
 OBJ = $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 EXE = $(EXE_DIR)/vonsh
-CFLAGS = -I$(INC_DIR) -DVERSION_STR=\"$(VERSION)\" -Wall
-LDFLAGS =
+CFLAGS = -I$(INC_DIR) -DVERSION_STR=\"$(VERSION)\" -Wall -Wformat -Werror=format-security
+LDFLAGS = -Wl,-z,relro,-z,now
 LDLIBS = -lSDL2 -lSDL2main -lSDL2_image -lSDL2_mixer
 .PHONY: all clean install
 all: release
-release: CFLAGS += -O3
+release: CFLAGS += -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong
 release: $(EXE)
 	strip --strip-all $^
 debug: CFLAGS += -g
