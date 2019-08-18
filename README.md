@@ -33,7 +33,7 @@ To build Debian installation package **../vonsh_x.y-z_arch.deb**:
 > dpkg-buildpackage -b -uc
 
 ## How to play
-If game is installed from package - type "vonsh". If game is only compiled - run vonsh_0.0/usr/games/vonsh binary.
+If game is installed from package - type "vonsh". If game is only compiled - from project directory run ./usr/games/vonsh binary.
 Use arrow keys to move snake. Eat food, avoid obstacles and screen edges.
 SPACE to pause/unpause, ESC to quit.
 
@@ -43,6 +43,7 @@ Music and sound effects can be toggled with Z and X.
 ### Code
 + Andrzej Urbaniak https://github.com/aurb
 + PCG Random Number Generation http://www.pcg-random.org
+
 ### Graphics
 + Beast https://opengameart.org/content/overworld-grass-biome
 + Henry Software https://henrysoftware.itch.io/pixel-food
@@ -50,51 +51,52 @@ Music and sound effects can be toggled with Z and X.
 + Good Neighbors font by Clint Bellanger
 + Yevhen Danchenko https://opengameart.org/content/trophies-goblets
 + Andrzej Urbaniak
+
 ### Sound Effects
 + Damaged Panda https://opengameart.org/content/100-plus-game-sound-effects-wavoggm4a
+
 ### Music
 + Juhani Junkala https://opengameart.org/content/5-chiptunes-action
 + Przemyslaw Sikorski https://opengameart.org/content/puzzle-tune-1
 Music licensed under CC-BY 3.0 https://creativecommons.org/licenses/by/3.0/
 
 ## License
-PCG Random Number Generation
-Files: inc/pcg_basic.h src/pcg_basic.c
-Copyright: 2014 Melissa O'Neill <oneill@pcg-random.org>
-License: Apache License, Version 2.0
++ PCG Random Number Generation, Files: inc/pcg_basic.h src/pcg_basic.c
+    + Copyright: 2014 Melissa O'Neill <oneill@pcg-random.org>
+    + License: Apache License, Version 2.0
 
-File: usr/share/games/vonsh/board_tiles.png
-Copyright: 2018 Beast
-License: CC0 1.0
++ File: usr/share/games/vonsh/board_tiles.png
+    + Copyright: 2018 Beast
+    + License: CC0 1.0
 
-File: usr/share/games/vonsh/food_tiles.png
-Copyright: 2016 Henry Software
-License: CC0 1.0
++ File: usr/share/games/vonsh/food_tiles.png
+    + Copyright: 2016 Henry Software
+    + License: CC0 1.0
 
-File: usr/share/games/vonsh/character_tiles.png
-Copyright: 2017 Fleurman
-License: CC0 1.0
++ File: usr/share/games/vonsh/character_tiles.png
+    + Copyright: 2017 Fleurman
+    + License: CC0 1.0
 
-File: usr/share/games/vonsh/good_neighbors.png
-Copyright: 2015 Clint Bellanger
-License: CC0 1.0
++ File: usr/share/games/vonsh/good_neighbors.png
+    + Copyright: 2015 Clint Bellanger
+    + License: CC0 1.0
 
-File: usr/share/games/vonsh/trophy-bronze.png
-Copyright: 2014 Yevhen Danchenko
-License: CC0 1.0
++ File: usr/share/games/vonsh/trophy-bronze.png
+    + Copyright: 2014 Yevhen Danchenko
+    + License: CC0 1.0
 
-Files: usr/share/games/vonsh/die_sound.wav usr/share/games/vonsh/exp_sound.wav 
-Copyright: 2014 Damaged Panda
-License: CC BY 3.0
++ Files: usr/share/games/vonsh/die_sound.wav usr/share/games/vonsh/exp_sound.wav 
+    + Copyright: 2014 Damaged Panda
+    + License: CC BY 3.0
 
-File: usr/share/games/vonsh/idle_tune.mp3
-Copyright: 2016 Juhani Junkala 
-License: CC0 1.0
++ File: usr/share/games/vonsh/idle_tune.mp3
+    + Copyright: 2016 Juhani Junkala 
+    + License: CC0 1.0
 
-Files: usr/share/games/vonsh/play_tune.mp3
-Copyright: 2013 Przemyslaw Sikorski
-License: CC BY 3.0
++ Files: usr/share/games/vonsh/play_tune.mp3
+    + Copyright: 2013 Przemyslaw Sikorski
+    + License: CC BY 3.0
 
-All files not mentioned above:
-Copyright: 2019 Andrzej Urbaniak
-License: MIT
++ All files not mentioned above:
+    + Copyright: 2019 Andrzej Urbaniak
+    + License: MIT
