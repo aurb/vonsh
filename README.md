@@ -1,5 +1,5 @@
 # Vonsh
-Snake-like game for Linux using SDL library.
+Snake-like game for Linux based on libSDL
 
 https://github.com/aurb/vonsh/
 
@@ -20,21 +20,28 @@ Build dependencies:
 ## How to build and install
 Commands to be executed from project root directory:
 
-To build release executable(optimization ON, debug symbols OFF) **usr/games/vonsh**:
+To build development release executable(optimization ON, debug symbols OFF) **./usr/games/vonsh**:
 > make release
 
-To build debug executable(optimization OFF, debug symbols ON) **usr/games/vonsh**:
+To build development debug executable(optimization OFF, debug symbols ON) **./usr/games/vonsh**:
 > make debug
 
 To clean project:
 > make clean
 
-To build Debian installation package **../vonsh_x.y-z_arch.deb**:
+To build Debian full installation package **../vonsh\_x.y-z\_arch.deb**:
 > dpkg-buildpackage -b -uc
 
+To install that package:
+> sudo dpkg -i ../vonsh\_x.y-z\_arch.deb
+
 ## How to play
-If game is installed from package - type "vonsh". If game is only compiled - from project directory run ./usr/games/vonsh binary.
+If game is installed from package - click "Vonsh" icon in your system menu or type "vonsh" in console.
+
+If only executable is compiled - from project directory type "./usr/games/vonsh".
+
 Use arrow keys to move snake. Eat food, avoid obstacles and screen edges.
+
 SPACE to pause/unpause, ESC to quit.
 
 Music and sound effects can be toggled with Z and X.

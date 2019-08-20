@@ -685,7 +685,7 @@ void render_screen(void)
             SDL_RenderCopy(renderer, txt_logo, NULL, &DstR);
             yc += img_h;
             SET_GREY_TEXT;
-            render_text(screen_w/2,    yc,             Center, "v"VERSION_STR);
+            render_text(screen_w/2,    yc,             Center, "Version: "VERSION_STR);
             yc += TILE_SIZE;
             SET_YELLOW_TEXT;
             render_text(screen_w/2-32, yc,             Right, "Arrows:");
