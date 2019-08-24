@@ -1,7 +1,8 @@
 #!/usr/bin/make -f
 
 #export DH_VERBOSE=1
-export VERSION_STR=$(shell dpkg-parsechangelog --show-field Version)
+include /usr/share/dpkg/pkg-info.mk
+export VERSION_STR=$(DEB_VERSION)
 
 %:
 	dh $@

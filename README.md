@@ -48,7 +48,7 @@ Music and sound effects can be toggled with Z and X.
 
 ## Authors
 ### Code
-+ Andrzej Urbaniak https://github.com/aurb
++ Andrzej Urbaniak https://github.com/aurb/
 + PCG Random Number Generation http://www.pcg-random.org
 
 ### Graphics

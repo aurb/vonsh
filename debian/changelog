@@ -1,5 +1,5 @@
-vonsh (1.0-1) buster; urgency=medium
+vonsh (1.0) unstable; urgency=medium
 
   * Initial dpkg-buildpackage work.
 
- -- Andrzej Urbaniak <urbaniak256@gmail.com>  Mon, 29 Jul 2019 12:13:43 +0200
+ -- Andrzej Urbaniak <au742582@gmail.com>  Fri, 23 Aug 2019 23:24:04 +0200
