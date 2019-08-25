@@ -11,8 +11,12 @@ Package dependencies:
 + libsdl2-mixer-2.0-0 (>= 2.0.2)
 
 Build dependencies:
-+ build-essential
-+ debhelper (>= 9)
++ libc6-dev (>=2.28)
++ gcc (>=4:8.3.0)
++ g++ (>=4:8.3.0)
++ make (>=4.2.1)
++ dpkg-dev (>=1.19.7)
++ debhelper (>= 12)
 + libsdl2-dev (>=2.0.9)
 + libsdl2-image-dev (>=2.0.4)
 + libsdl2-mixer-dev (>=2.0.4)
@@ -29,11 +33,11 @@ To build development debug executable(optimization OFF, debug symbols ON) **./us
 To clean project:
 > make clean
 
-To build Debian full installation package **../vonsh\_x.y-z\_arch.deb**:
+To build Debian full installation package **../vonsh\_1.0\_arch.deb**:
 > dpkg-buildpackage -b -uc
 
 To install that package:
-> sudo dpkg -i ../vonsh\_x.y-z\_arch.deb
+> sudo dpkg -i ../vonsh\_1.0\_arch.deb
 
 ## How to play
 If game is installed from package - click "Vonsh" icon in your system menu or type "vonsh" in console.

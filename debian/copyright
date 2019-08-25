@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: vonsh
-Upstream-Contact: Andrzej Urbaniak <au742582@gmail.com>
+Upstream-Contact: Andrzej Urbaniak <au742582@interia.pl>
 Source: https://github.com/aurb/vonsh/
 
 Files: *

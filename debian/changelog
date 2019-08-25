@@ -2,4 +2,4 @@ vonsh (1.0) unstable; urgency=medium
 
   * Initial dpkg-buildpackage work.
 
- -- Andrzej Urbaniak <au742582@gmail.com>  Fri, 23 Aug 2019 23:24:04 +0200
+ -- Andrzej Urbaniak <au742582@interia.pl>  Sun, 25 Aug 2019 10:41:36 +0200
