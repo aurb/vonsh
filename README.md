@@ -5,21 +5,16 @@ https://github.com/aurb/vonsh/
 
 ## Depedencies
 Package dependencies:
-+ libc6 (>= 2.2.5)
-+ libsdl2-2.0-0 (>= 2.0.9)
-+ libsdl2-image-2.0-0 (>= 2.0.2)
-+ libsdl2-mixer-2.0-0 (>= 2.0.2)
++ SDL 2
++ SDL\_image 2
++ SDL\_mixer 2
 
 Build dependencies:
-+ libc6-dev (>=2.28)
-+ gcc (>=4:8.3.0)
-+ g++ (>=4:8.3.0)
-+ make (>=4.2.1)
-+ dpkg-dev (>=1.19.7)
-+ debhelper (>= 12)
-+ libsdl2-dev (>=2.0.9)
-+ libsdl2-image-dev (>=2.0.4)
-+ libsdl2-mixer-dev (>=2.0.4)
++ build-essential
++ debhelper (>= 9)
++ libsdl2-dev
++ libsdl2-image-dev
++ libsdl2-mixer-dev
 
 ## How to build and install
 Commands to be executed from project root directory:
