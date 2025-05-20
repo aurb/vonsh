@@ -17,20 +17,21 @@ void set_text_color(uint8_t r, uint8_t g, uint8_t b) {
     SDL_SetTextureColorMod(font_texture, r, g, b);
 }
 
-int render_text(int x, int y, TextAlignment align, char *text) {
+int get_text_width(const char* text) {
     int i; /* index of letter font layout table */
-    char *text_p = NULL;
-    int text_w = 0; /* text width */
-    SDL_Rect SrcR, DstR;
+    const char* text_p = text;
+    int text_w = 0; /* current line width */
+    int max_w = 0; /* width of longest line */
 
-    SrcR.y = 0;
-    DstR.y = y;
-    SrcR.h = DstR.h = font_h;
-
-    /* calculate text width, needed for correct Right and Center alignments */
-    text_p = text;
     while(*text_p) {
-        if (*text_p != ' ') {
+        if (*text_p == '\n') {
+            /* End of line - update max width and reset current width */
+            if (text_w > max_w) {
+                max_w = text_w;
+            }
+            text_w = 0;
+        }
+        else if (*text_p != ' ') {
             i = *text_p - '!';
             text_w += font_layout[i+1] - font_layout[i];
         }
@@ -40,32 +41,135 @@ int render_text(int x, int y, TextAlignment align, char *text) {
         text_p++;
     }
 
-    /* start position of text */
-    if (align == Right) {
-        DstR.x = x - text_w;
-    }
-    else if (align == Center) {
-        DstR.x = x - text_w/2;
-    }
-    else {
-        DstR.x = x;
+    /* Check final line width */
+    if (text_w > max_w) {
+        max_w = text_w;
     }
 
-    /* Render text */
-    text_p = text;
+    return max_w;
+}
+
+int get_text_height(const char* text) {
+    const char* text_p = text;
+    int line_count = 1;  // Start at 1 for first line
+    
     while(*text_p) {
-        if (*text_p != ' ') {
-            i = *text_p - '!';
-            SrcR.x = font_layout[i];
-            SrcR.w = DstR.w = font_layout[i+1] - font_layout[i];
-            SDL_RenderCopy(text_renderer, font_texture, &SrcR, &DstR);
-            DstR.x += DstR.w;
+        if (*text_p == '\n') {
+            line_count++;
+        }
+        text_p++;
+    }
+    
+    return line_count * font_h;
+}
+
+int render_text(SDL_Renderer* renderer, SDL_Texture* font, const char* text, int x, int y, TextHorizontalAlignment horizontal_align, TextVerticalAlignment vertical_align) {
+    int i; /* index of letter font layout table */
+    const char* text_p = text;
+    const char* line_start = text;
+    int text_h = get_text_height(text);
+    SDL_Rect SrcR, DstR;
+    int line_y = y;
+    int line_width = 0;
+    int max_width = 0;
+
+    SrcR.y = 0;
+    SrcR.h = DstR.h = font_h;
+
+    /* start y position of text block */
+    if (vertical_align == ALIGN_TOP) {
+        line_y = y;
+    }
+    else if (vertical_align == ALIGN_CENTER_VERTICAL) {
+        line_y = y - text_h/2;
+    }
+    else if (vertical_align == ALIGN_BOTTOM) {
+        line_y = y - text_h;
+    }
+
+    /* Render text characters line by line */
+    while(*text_p) {
+        if (*text_p == '\n' || *text_p == '\0') {
+            /* Calculate start x position for this line */
+            if (horizontal_align == ALIGN_RIGHT) {
+                DstR.x = x - line_width;
+            }
+            else if (horizontal_align == ALIGN_CENTER_HORIZONTAL) {
+                DstR.x = x - line_width/2;
+            }
+            else { /* ALIGN_LEFT */
+                DstR.x = x;
+            }
+            DstR.y = line_y;
+
+            /* Render the line */
+            while(line_start < text_p) {
+                if (*line_start != ' ') {
+                    i = *line_start - '!';
+                    SrcR.x = font_layout[i];
+                    SrcR.w = DstR.w = font_layout[i+1] - font_layout[i];
+                    SDL_RenderCopy(renderer, font, &SrcR, &DstR);
+                    DstR.x += DstR.w;
+                }
+                else {
+                    DstR.x += font_h/3; /* substitute for space */
+                }
+                line_start++;
+            }
+
+            /* Move to next line */
+            line_y += font_h;
+            line_start = text_p + 1;
+            if (line_width > max_width) {
+                max_width = line_width;
+            }
+            line_width = 0;
         }
         else {
-            DstR.x += font_h/3; /* substitute for space */
+            /* Calculate width of current line */
+            if (*text_p != ' ') {
+                i = *text_p - '!';
+                line_width += font_layout[i+1] - font_layout[i];
+            }
+            else {
+                line_width += font_h/3;
+            }
         }
         text_p++;
     }
 
-    return text_w;
+    /* Render final line if needed */
+    if (line_start < text_p) {
+        /* Calculate start x position for last line */
+        if (horizontal_align == ALIGN_RIGHT) {
+            DstR.x = x - line_width;
+        }
+        else if (horizontal_align == ALIGN_CENTER_HORIZONTAL) {
+            DstR.x = x - line_width/2;
+        }
+        else { /* ALIGN_LEFT */
+            DstR.x = x;
+        }
+        DstR.y = line_y;
+
+        /* Render the last line */
+        while(line_start < text_p) {
+            if (*line_start != ' ') {
+                i = *line_start - '!';
+                SrcR.x = font_layout[i];
+                SrcR.w = DstR.w = font_layout[i+1] - font_layout[i];
+                SDL_RenderCopy(renderer, font, &SrcR, &DstR);
+                DstR.x += DstR.w;
+            }
+            else {
+                DstR.x += font_h/3; /* substitute for space */
+            }
+            line_start++;
+        }
+        if (line_width > max_width) {
+            max_width = line_width;
+        }
+    }
+
+    return max_width;
 }

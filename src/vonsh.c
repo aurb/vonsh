@@ -9,16 +9,28 @@
 #include "pcg_basic.h"
 
 #define WINDOW_TITLE "Vonsh" /* window title string */
-#define WINDOW_W 900 /* windowed mode resolution */
-#define WINDOW_H 700
+#define BOARD_WIDTH (56)
+#define BOARD_HEIGHT (41)
 #define RES_DIR "../share/games/vonsh/" /* resources directory */
-
+#define TILE_SIZE (16)
+#define MENU_WIDTH (20*16)
+#define MENU_BORDER (20)
+#define MENU_LOGO_SPACE (15)
+#define MENU_HEAD_SPACE (24)
+#define MENU_ITEM_WIDTH (180)
+#define MENU_ITEM_HEIGHT (24)
+#define GAME_OVER_WIDTH (16*16)
+#define GAME_OVER_BORDER (16)
+#define GAME_OVER_ITEM_SPACE (12)
 typedef enum e_GameState {
     NotInitialized,
     NotStarted,
     Playing,
     Paused,
-    GameOver
+    GameOver,
+    TitleScreen,
+    OptionsMenu,
+    KeyConfiguring
 } GameState;
 
 typedef enum e_FieldType { /* indicates what is inside game board field */
@@ -37,14 +49,13 @@ typedef struct BoardField {
     int pdy; /* delta y to previous piece of snake. */
 } BoardField;
 
-#define TILE_SIZE 16
-#define GAME_SPEED 200
-#define GROUND_TILES 8
-#define WALL_TILES 4
-#define FOOD_TILES 6
-#define TOTAL_CHAR 24
-#define CHAR_ANIM_FRAMES 4
-#define FOOD_BLINK_T 27
+#define RENDER_INTERVAL 50   // Interval between frames in milliseconds
+#define GROUND_TILES 8  // Number of ground tiles in the tileset
+#define WALL_TILES 4  // Number of wall tiles in the tileset
+#define FOOD_TILES 6  // Number of food tiles in the tileset
+#define TOTAL_CHAR 24  // Total number of characters in the tileset
+#define CHAR_ANIM_FRAMES 4  // Number of animation frames for characters
+#define FOOD_BLINK_FRAMES 27  // Number of frames in blink food animation
 SDL_Window *screen = NULL;
 SDL_Renderer *renderer = NULL;
 SDL_Texture *txt_game_board = NULL;
@@ -76,7 +87,8 @@ SDL_Rect *food_tile = NULL;
 BoardField *game_board = NULL;
 GameState game_state = NotInitialized;
 
-int game_board_w=0, game_board_h=0; /* game board width and height (in full tiles)*/
+int win_board_w=BOARD_WIDTH, win_board_h=BOARD_HEIGHT; /* windowed mode game board width and height (in full tiles)*/
+int board_w=0, board_h=0; /* current game board width and height (in full tiles)*/
 int screen_w=0, screen_h=0; /* game window width and height */
 int fullscreen=0;     /* 1: full screen mode, 0: windowed mode */
 int dhx=0, dhy=0;     /* head movement direction */
@@ -88,8 +100,60 @@ int new_record=0;     /* flag set if user beats previous record */
 int expand_counter=0; /* counter of snake segments to add and walls to seed */
 int ck_press=0;       /* control key pressed indicator */
 int frame=0;          /* animation frame */
+float animation_progress = 0.0f; /* Animation progress between frames */
 int music_on=1;       /* music enabled by default */
 int sfx_on=1;         /* sound effects enabled by default */
+
+/* Key configuration */
+SDL_KeyCode key_left = SDLK_LEFT;
+SDL_KeyCode key_right = SDLK_RIGHT;
+SDL_KeyCode key_up = SDLK_UP;
+SDL_KeyCode key_down = SDLK_DOWN;
+SDL_KeyCode key_pause = SDLK_SPACE;  // Fixed to Space key
+
+typedef struct MenuItem {
+    const char* text;
+    void (*action)(void);
+    SDL_Rect rect; // For mouse collision
+    int is_key_config; // Flag to indicate if this is a key configuration item
+    const char* config_label; // e.g., "Left:"
+    SDL_KeyCode* key_to_configure; // Pointer to the actual key variable
+} MenuItem;
+
+// Menu actions
+void menu_action_play(void);
+void menu_action_options(void);
+void menu_action_exit(void);
+void menu_action_back_to_title(void);
+void menu_action_toggle_music(void);
+void menu_action_toggle_sfx(void);
+void menu_action_toggle_fullscreen(void);
+void menu_action_configure_key(MenuItem* item); // Placeholder, will pass specific item
+
+// Title Screen Menu
+MenuItem title_menu_items[] = {
+    {"Play", menu_action_play, {0,0,0,0}, 0, NULL, NULL},
+    {"Options", menu_action_options, {0,0,0,0}, 0, NULL, NULL},
+    {"Exit", menu_action_exit, {0,0,0,0}, 0, NULL, NULL}
+};
+int title_menu_item_count = sizeof(title_menu_items) / sizeof(MenuItem);
+int title_menu_selected_item = 0;
+
+// Options Screen Menu
+MenuItem options_menu_items[] = {
+    {NULL, NULL, {0,0,0,0}, 1, "Left:", &key_left},
+    {NULL, NULL, {0,0,0,0}, 1, "Right:", &key_right},
+    {NULL, NULL, {0,0,0,0}, 1, "Up:", &key_up},
+    {NULL, NULL, {0,0,0,0}, 1, "Down:", &key_down},
+    {"Pause: SPACE", NULL, {0,0,0,0}, 0, NULL, NULL},  // Changed to non-configurable item
+    {NULL, menu_action_toggle_music, {0,0,0,0}, 0, NULL, NULL},
+    {NULL, menu_action_toggle_sfx, {0,0,0,0}, 0, NULL, NULL},
+    {NULL, menu_action_toggle_fullscreen, {0,0,0,0}, 0, NULL, NULL},
+    {"Back", menu_action_back_to_title, {0,0,0,0}, 0, NULL, NULL}
+};
+int options_menu_item_count = sizeof(options_menu_items) / sizeof(MenuItem);
+int options_menu_selected_item = 0;
+int configuring_key_item_index = -1; // Index of the item being configured
 
 /* Callback for animation frame timer.
    Generates SDL_USEREVENT when main game loop shall render next frame. */
@@ -110,7 +174,7 @@ uint32_t tick_callback(uint32_t interval, void *param) {
 
 void init_game_board(void) {
     /* Reset the game board array */
-    for (int i=0; i<game_board_w*game_board_h; i++) {
+    for (int i=0; i<board_w*board_h; i++) {
         game_board[i].type = Empty;
         game_board[i].ndx = 0;
         game_board[i].ndy = 0;
@@ -130,8 +194,8 @@ void init_game_board(void) {
     /* Fill background with random pattern of ground tiles */
     int x, y;
     SDL_Rect DstR = { 0, 0, TILE_SIZE, TILE_SIZE };
-    for (y=0; y<game_board_h; y++)
-        for (x=0; x<game_board_w; x++) {
+    for (y=0; y<board_h; y++)
+        for (x=0; x<board_w; x++) {
             DstR.x = x*TILE_SIZE; DstR.y = y*TILE_SIZE;
             SDL_RenderCopy(renderer, txt_env_tileset, &ground_tile[pcg32_boundedrand(GROUND_TILES)], &DstR);
         }
@@ -161,131 +225,133 @@ static int load_texture(SDL_Surface **srf, SDL_Texture **txt, const char *filepa
     }
 }
 
+/* Creates display area in windowed mode based on current game board dimensions */
+static int create_windowed_display(void) {
+    board_w = win_board_w;
+    board_h = win_board_h;
+    screen_w = board_w*TILE_SIZE;
+    screen_h = (board_h+1)*TILE_SIZE;
+
+    if (game_state == NotInitialized) {
+        if ((screen = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_CENTERED,
+                     SDL_WINDOWPOS_CENTERED, screen_w, screen_h, 0)) == NULL) {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                "SDL window not created", SDL_GetError(), NULL);
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                "Error", "Failed to switch to windowed mode", NULL);
+            return 1;
+        }
+    } else {
+        SDL_SetWindowFullscreen(screen, 0);
+        SDL_SetWindowSize(screen, screen_w, screen_h);
+        SDL_SetWindowPosition(screen, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+    }
+    
+    return 0;
+}
+
+/* Creates display area in fullscreen mode and updates game board dimensions */
+static int create_fullscreen_display(void) {
+    if (game_state == NotInitialized) {
+        if ((screen = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_CENTERED,
+                     SDL_WINDOWPOS_CENTERED, 0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP)) == NULL) {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                "SDL window not created", SDL_GetError(), NULL);
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                "Error", "Failed to switch to fullscreen mode", NULL);
+            return 1;
+        }
+    } else {
+        SDL_SetWindowFullscreen(screen, SDL_WINDOW_FULLSCREEN_DESKTOP);
+    }
+    
+    SDL_GetWindowSize(screen, &screen_w, &screen_h);
+    board_w = screen_w/TILE_SIZE;
+    board_h = screen_h/TILE_SIZE - 1;
+    return 0;
+}
+
 /*
     Initialize game engine
     retval 0 - initialization OK.
     retval 1 - error during init. Program has to be terminated
  */
-int init_game(int sw, int sh, int fullscreen) {
-
+int init_game_engine(int sw, int sh, int fullscreen) {
     /* Executed only at start of program */
-    if (game_state == NotInitialized) {
-        /* init SDL library */
-        if (SDL_Init(SDL_INIT_VIDEO)) {
-            printf("Error initializing video subsystem: %s\n", SDL_GetError());
-            return 1;
-        }
-        else if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_AUDIO)) {
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                "SDL initialization error", SDL_GetError(), NULL);
-            return 1;
-        }
-        else if ((IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG) == 0) {
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                "SDL Image initialization error", IMG_GetError(), NULL);
-            return 1;
-        }
-        #define EXE_PATH_SIZE 200
-        char exe_path[EXE_PATH_SIZE]; /* resources path */
-        memset(exe_path, 0, EXE_PATH_SIZE);
-        if (readlink("/proc/self/exe", exe_path, EXE_PATH_SIZE) == -1) {
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                "Work dir init error", "Error reading executable path", NULL);
-            return 1;
-        }
-        if (chdir(dirname(exe_path)) == -1) {
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                "Work dir init error", "Error setting current working directory", NULL);
-            return 1;
-        }
-        pcg32_srandom(time(NULL), 0x12345678); /* seed random number generator */
-        if( Mix_OpenAudio( 44100, MIX_DEFAULT_FORMAT, MIX_DEFAULT_CHANNELS, 4096 ) == -1 ) {
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                "Error opening audio device", Mix_GetError(), NULL);
-            return 1;
-        }
-        Mix_AllocateChannels(4);
-
-        if ((exp_chunk = Mix_LoadWAV(RES_DIR"exp_sound.wav")) == NULL) {
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                "Error loading sample", RES_DIR"exp_sound.wav", NULL);
-            return 1;
-        }
-        if ((die_chunk = Mix_LoadWAV(RES_DIR"die_sound.wav")) == NULL) {
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                "Error loading sample", RES_DIR"die_sound.wav", NULL);
-            return 1;
-        }
-        if ((idle_music = Mix_LoadMUS(RES_DIR"idle_tune.mp3")) == NULL) {
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                "Error loading music", RES_DIR"idle_tune.mp3", NULL);
-            return 1;
-        }
-        if ((play_music = Mix_LoadMUS(RES_DIR"play_tune.mp3")) == NULL) {
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                "Error loading music", RES_DIR"play_tune.mp3", NULL);
-            return 1;
-        }
-    }
-
-    /* If fullscreen mode was selected, then set game window resolution to current desktop resolution and set
-       game board dimensions accordingly */
-    if (fullscreen) {
-        if (game_state == NotInitialized) {
-            if ((screen = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_CENTERED,
-                         SDL_WINDOWPOS_CENTERED, 0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP)) == NULL) {
-                SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                    "SDL window not created", SDL_GetError(), NULL);
-                return 1;
-            }
-        }
-        else {
-            SDL_SetWindowFullscreen(screen, SDL_WINDOW_FULLSCREEN_DESKTOP);
-        }
-        SDL_GetWindowSize(screen, &screen_w, &screen_h);
-
-        game_board_w = screen_w/TILE_SIZE;
-        game_board_h = screen_h/TILE_SIZE - 1;
-    }
-    /* If window mode was selected, then set game window to selected resolution and
-       set game board dimensions accordingly */
-    else {
-        /* game board dimensions(in full tiles) */
-        game_board_w = sw/TILE_SIZE;
-        game_board_h = sh/TILE_SIZE - 1;
-        /* game screen dimensions */
-        screen_w = game_board_w*TILE_SIZE;
-        /* bottom TILE_SIZE pixels is used for displaying score*/
-        screen_h = (game_board_h+1)*TILE_SIZE;
-
-        if (game_state == NotInitialized) {
-            if ((screen = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_CENTERED,
-                         SDL_WINDOWPOS_CENTERED, screen_w, screen_h, 0)) == NULL) {
-                SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                    "SDL window not created", SDL_GetError(), NULL);
-                return 1;
-            }
-        }
-        else {
-            SDL_SetWindowFullscreen(screen, 0);
-            SDL_SetWindowSize(screen, screen_w, screen_h);
-            SDL_SetWindowPosition(screen, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
-        }
-    }
-
-    if (game_state == NotInitialized) {
-        if ((renderer = SDL_CreateRenderer(screen, -1,
-                       SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE)) == NULL) {
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                "SDL renderer not created", SDL_GetError(), NULL);
-            return 1;
-        }
-    }
     if (game_state != NotInitialized) {
-        /* when switching window resolution release previously created game board texture */
-        SDL_DestroyTexture(txt_game_board);
-        /* free previously allocated game board array */
-        free(game_board);
+        printf("Error: init_game_engin called in wrong state\n");
+        return 1;
+    }
+
+    /* init SDL library */
+    if (SDL_Init(SDL_INIT_VIDEO)) {
+        printf("Error initializing video subsystem: %s\n", SDL_GetError());
+        return 1;
+    }
+    else if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_AUDIO)) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "SDL initialization error", SDL_GetError(), NULL);
+        return 1;
+    }
+    else if ((IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG) == 0) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "SDL Image initialization error", IMG_GetError(), NULL);
+        return 1;
+    }
+    #define EXE_PATH_SIZE 200
+    char exe_path[EXE_PATH_SIZE]; /* resources path */
+    memset(exe_path, 0, EXE_PATH_SIZE);
+    if (readlink("/proc/self/exe", exe_path, EXE_PATH_SIZE) == -1) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "Work dir init error", "Error reading executable path", NULL);
+        return 1;
+    }
+    if (chdir(dirname(exe_path)) == -1) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "Work dir init error", "Error setting current working directory", NULL);
+        return 1;
+    }
+    pcg32_srandom(time(NULL), 0x12345678); /* seed random number generator */
+    if( Mix_OpenAudio( 44100, MIX_DEFAULT_FORMAT, MIX_DEFAULT_CHANNELS, 4096 ) == -1 ) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "Error opening audio device", Mix_GetError(), NULL);
+        return 1;
+    }
+    Mix_AllocateChannels(4);
+
+    if ((exp_chunk = Mix_LoadWAV(RES_DIR"exp_sound.wav")) == NULL) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "Error loading sample", RES_DIR"exp_sound.wav", NULL);
+        return 1;
+    }
+    if ((die_chunk = Mix_LoadWAV(RES_DIR"die_sound.wav")) == NULL) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "Error loading sample", RES_DIR"die_sound.wav", NULL);
+        return 1;
+    }
+    if ((idle_music = Mix_LoadMUS(RES_DIR"idle_tune.mp3")) == NULL) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "Error loading music", RES_DIR"idle_tune.mp3", NULL);
+        return 1;
+    }
+    if ((play_music = Mix_LoadMUS(RES_DIR"play_tune.mp3")) == NULL) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "Error loading music", RES_DIR"play_tune.mp3", NULL);
+        return 1;
+    }
+
+    /* Create display area based on mode */
+    if (fullscreen) {
+        if (create_fullscreen_display()) return 1;
+    } else {
+        if (create_windowed_display()) return 1;
+    }
+
+    if ((renderer = SDL_CreateRenderer(screen, -1,
+                    SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE)) == NULL) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "SDL renderer not created", SDL_GetError(), NULL);
+        return 1;
     }
     if ((txt_game_board = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
                         SDL_TEXTUREACCESS_TARGET, screen_w, screen_h)) == NULL) {
@@ -294,82 +360,75 @@ int init_game(int sw, int sh, int fullscreen) {
         return 1;
     }
 
-    if ((game_board = calloc(game_board_w*game_board_h, sizeof(BoardField))) == NULL) {
+    if ((game_board = calloc(board_w*board_h, sizeof(BoardField))) == NULL) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
             "Error", "Error allocating memory", NULL);
         return 1;
     }
 
-    /* Executed only at start of program */
-    if (game_state == NotInitialized) {
-        /* load textures */
-        if (load_texture(&srf_env_tileset, &txt_env_tileset, RES_DIR"board_tiles.png") ||
-            load_texture(&srf_food_tileset, &txt_food_tileset, RES_DIR"food_tiles.png") ||
-            load_texture(&srf_food_marker, &txt_food_marker, RES_DIR"food_marker.png") ||
-            load_texture(&srf_char_tileset, &txt_char_tileset, RES_DIR"character_tiles.png") ||
-            load_texture(&srf_font, &txt_font, RES_DIR"good_neighbors.png") ||
-            load_texture(&srf_logo, &txt_logo, RES_DIR"logo.png") ||
-            load_texture(&srf_trophy, &txt_trophy, RES_DIR"trophy-bronze.png")) {
-            /* loading of any of the textures failed */
-            return 1;
-        }
-
-        /* set blending mode for food marker*/
-        if (SDL_SetTextureBlendMode(txt_food_marker, SDL_BLENDMODE_ADD)) {
-            return 1;
-        }
-
-        /* allocate tile info arrays */
-        if ((ground_tile = calloc(GROUND_TILES, sizeof(SDL_Rect))) == NULL ||
-            (wall_tile = calloc(WALL_TILES, sizeof(SDL_Rect))) == NULL ||
-            (food_tile = calloc(FOOD_TILES, sizeof(SDL_Rect))) == NULL) {
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                "Error", "Error allocating memory", NULL);
-            return 1;
-        }
-        /* fill tile info arrays */
-        ground_tile[0].x = 0;   ground_tile[0].y = 0;
-        ground_tile[1].x = 1;   ground_tile[1].y = 0;
-        ground_tile[2].x = 2;   ground_tile[2].y = 0;
-        ground_tile[3].x = 3;   ground_tile[3].y = 0;
-        ground_tile[4].x = 4;   ground_tile[4].y = 0;
-        ground_tile[5].x = 0;   ground_tile[5].y = 1;
-        ground_tile[6].x = 0;   ground_tile[6].y = 2;
-        ground_tile[7].x = 0;   ground_tile[7].y = 3;
-        for (int i=0; i<GROUND_TILES; i++) {
-            ground_tile[i].x *= TILE_SIZE;   ground_tile[i].y *= TILE_SIZE;
-            ground_tile[i].w = ground_tile[i].h = TILE_SIZE;
-        }
-        wall_tile[0].x = 0;  wall_tile[0].y = 17;
-        wall_tile[1].x = 1;  wall_tile[1].y = 17;
-        wall_tile[2].x = 2;  wall_tile[2].y = 17;
-        wall_tile[3].x = 3;  wall_tile[3].y = 17;
-        for (int i=0; i<WALL_TILES; i++) {
-            wall_tile[i].x *= TILE_SIZE;   wall_tile[i].y *= TILE_SIZE;
-            wall_tile[i].w = wall_tile[i].h = TILE_SIZE;
-        }
-        food_tile[0].x = 4;  food_tile[0].y = 1;
-        food_tile[1].x = 0;  food_tile[1].y = 4;
-        food_tile[2].x = 1;  food_tile[2].y = 4;
-        food_tile[3].x = 2;  food_tile[3].y = 4;
-        food_tile[4].x = 0;  food_tile[4].y = 6;
-        food_tile[5].x = 3;  food_tile[5].y = 6;
-        for (int i=0; i<FOOD_TILES; i++) {
-            food_tile[i].x *= TILE_SIZE;   food_tile[i].y *= TILE_SIZE;
-            food_tile[i].w = food_tile[i].h = TILE_SIZE;
-        }
-
-        if (Mix_PlayMusic(idle_music, -1) == -1) {} /* TODO: might fail - shall we handle this? */
+    /* load textures */
+    if (load_texture(&srf_env_tileset, &txt_env_tileset, RES_DIR"board_tiles.png") ||
+        load_texture(&srf_food_tileset, &txt_food_tileset, RES_DIR"food_tiles.png") ||
+        load_texture(&srf_food_marker, &txt_food_marker, RES_DIR"food_marker.png") ||
+        load_texture(&srf_char_tileset, &txt_char_tileset, RES_DIR"character_tiles.png") ||
+        load_texture(&srf_font, &txt_font, RES_DIR"good_neighbors.png") ||
+        load_texture(&srf_logo, &txt_logo, RES_DIR"logo.png") ||
+        load_texture(&srf_trophy, &txt_trophy, RES_DIR"trophy-bronze.png")) {
+        /* loading of any of the textures failed */
+        return 1;
     }
+
+    /* set blending mode for food marker*/
+    if (SDL_SetTextureBlendMode(txt_food_marker, SDL_BLENDMODE_ADD)) {
+        return 1;
+    }
+
+    /* allocate tile info arrays */
+    if ((ground_tile = calloc(GROUND_TILES, sizeof(SDL_Rect))) == NULL ||
+        (wall_tile = calloc(WALL_TILES, sizeof(SDL_Rect))) == NULL ||
+        (food_tile = calloc(FOOD_TILES, sizeof(SDL_Rect))) == NULL) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "Error", "Error allocating memory", NULL);
+        return 1;
+    }
+    /* fill tile info arrays */
+    ground_tile[0].x = 0;   ground_tile[0].y = 0;
+    ground_tile[1].x = 1;   ground_tile[1].y = 0;
+    ground_tile[2].x = 2;   ground_tile[2].y = 0;
+    ground_tile[3].x = 3;   ground_tile[3].y = 0;
+    ground_tile[4].x = 4;   ground_tile[4].y = 0;
+    ground_tile[5].x = 0;   ground_tile[5].y = 1;
+    ground_tile[6].x = 0;   ground_tile[6].y = 2;
+    ground_tile[7].x = 0;   ground_tile[7].y = 3;
+    for (int i=0; i<GROUND_TILES; i++) {
+        ground_tile[i].x *= TILE_SIZE;   ground_tile[i].y *= TILE_SIZE;
+        ground_tile[i].w = ground_tile[i].h = TILE_SIZE;
+    }
+    wall_tile[0].x = 0;  wall_tile[0].y = 17;
+    wall_tile[1].x = 1;  wall_tile[1].y = 17;
+    wall_tile[2].x = 2;  wall_tile[2].y = 17;
+    wall_tile[3].x = 3;  wall_tile[3].y = 17;
+    for (int i=0; i<WALL_TILES; i++) {
+        wall_tile[i].x *= TILE_SIZE;   wall_tile[i].y *= TILE_SIZE;
+        wall_tile[i].w = wall_tile[i].h = TILE_SIZE;
+    }
+    food_tile[0].x = 4;  food_tile[0].y = 1;
+    food_tile[1].x = 0;  food_tile[1].y = 4;
+    food_tile[2].x = 1;  food_tile[2].y = 4;
+    food_tile[3].x = 2;  food_tile[3].y = 4;
+    food_tile[4].x = 0;  food_tile[4].y = 6;
+    food_tile[5].x = 3;  food_tile[5].y = 6;
+    for (int i=0; i<FOOD_TILES; i++) {
+        food_tile[i].x *= TILE_SIZE;   food_tile[i].y *= TILE_SIZE;
+        food_tile[i].w = food_tile[i].h = TILE_SIZE;
+    }
+
+    if (Mix_PlayMusic(idle_music, -1) == -1) {} /* TODO: might fail - shall we handle this? */
 
     /* init text rendering functionality */
     init_text_renderer(renderer, txt_font);
     /* Reset game board and generate new background texture. */
     init_game_board();
-    if (game_state == NotInitialized) {
-        /* Start animation frame timer. */
-        game_timer = SDL_AddTimer(GAME_SPEED/CHAR_ANIM_FRAMES, tick_callback, 0);
-    }
     game_state = NotStarted;
     return 0;
 }
@@ -420,13 +479,13 @@ void seed_item(FieldType item_type)
     int board_offs = 0; /* offset of field in game board */
     int x = 0, y = 0; /* coordinates of field in game board */
     while(1) {
-        board_offs = pcg32_boundedrand(game_board_w*game_board_h);
+        board_offs = pcg32_boundedrand(board_w*board_h);
         if (game_board[board_offs].type == Empty) {
             game_board[board_offs].type = item_type;
             /* render seeded wall to game board texture */
             if (item_type == Wall) {
-                x = board_offs % game_board_w;
-                y = board_offs / game_board_w;
+                x = board_offs % board_w;
+                y = board_offs / board_w;
                 SDL_Rect DstR = { x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE };
                 /* Redirect rendering to the game board texture */
                 SDL_SetRenderTarget(renderer, txt_game_board);
@@ -452,11 +511,11 @@ void update_play_state(void)
 {
     /* verify all kinds of collisions */
     if (hx+dhx < 0             || hy+dhy < 0 ||
-        hx+dhx >= game_board_w || hy+dhy >= game_board_h) {
+        hx+dhx >= board_w || hy+dhy >= board_h) {
         /* collision with game board edge */
         game_state = GameOver; /* GAME OVER */
     }
-    else if (game_board[game_board_w*(hy+dhy)+hx+dhx].type == Food) {
+    else if (game_board[board_w*(hy+dhy)+hx+dhx].type == Food) {
         /* food hit - increase score, start expanding snake, seed new food */
         score++;
         if (score > hi_score) {
@@ -466,18 +525,18 @@ void update_play_state(void)
         expand_counter += score;
         seed_item(Food);
     }
-    else if (game_board[game_board_w*(hy+dhy)+hx+dhx].type != Empty) {
+    else if (game_board[board_w*(hy+dhy)+hx+dhx].type != Empty) {
         /* collision with snake body or wall */
         game_state = GameOver; /* GAME OVER */
     }
     if (game_state == Playing) {
         int foff; /* game board field offset */
         /* move snake head */
-        foff = game_board_w*hy+hx;
+        foff = board_w*hy+hx;
         game_board[foff].ndx = dhx; /* update "neck" direction towards new head position */
         game_board[foff].ndy = dhy;
         hx += dhx;    hy += dhy; /* update head position */
-        foff = game_board_w*hy+hx;
+        foff = board_w*hy+hx;
         game_board[foff].type = Snake;
         game_board[foff].ndx = dhx; /* update head direction */
         game_board[foff].ndy = dhy;
@@ -487,20 +546,20 @@ void update_play_state(void)
         int ix = tx, iy = ty; /* indexes used for traversing snake body */
         int pb1, pb2; /* buffers for shifting character kinds from tail to head */
         /* shift character kinds from tail to head */
-        pb1 = game_board[game_board_w*iy+ix].p;
+        pb1 = game_board[board_w*iy+ix].p;
         do {
             /* move character kind from previous position to next. */
-            foff = game_board_w*iy+ix;
+            foff = board_w*iy+ix;
             ix = ix + game_board[foff].ndx;
             iy = iy + game_board[foff].ndy;
-            foff = game_board_w*iy+ix;
+            foff = board_w*iy+ix;
             pb2 = game_board[foff].p; /* buffer current character kind... */
             game_board[foff].p = pb1; /* and overwrite it with previous kind... */
             pb1 = pb2; /* and then exchange buffers */
         } while(ix!=hx || iy!=hy);
 
         if (expand_counter==0) { /* move snake tail if not expanding */
-            foff = game_board_w*ty+tx; /* tail offset on game board */
+            foff = board_w*ty+tx; /* tail offset on game board */
             tx = tx + game_board[foff].ndx;
             ty = ty + game_board[foff].ndy;
             game_board[foff].type = Empty;
@@ -509,7 +568,7 @@ void update_play_state(void)
             game_board[foff].ndy = game_board[foff].pdy = 0;
         }
         else { /* expand tail and seed new obstacle */
-            game_board[game_board_w*ty+tx].p = pcg32_boundedrand(TOTAL_CHAR);
+            game_board[board_w*ty+tx].p = pcg32_boundedrand(TOTAL_CHAR);
             seed_item(Wall);
             expand_counter--;
             if (sfx_on) {
@@ -538,17 +597,18 @@ void start_play(void) {
     /* initialize movement direction and position */
     dhx = 0;   dhy = -1;
     score = expand_counter = 0;
-    hx = tx = game_board_w/2;   hy = ty = game_board_h/2;
+    hx = tx = board_w/2;   hy = ty = board_h/2;
     /* seed first piece of snake */
-    game_board[game_board_w*hy+hx].type = Snake;
-    game_board[game_board_w*hy+hx].p = pcg32_boundedrand(TOTAL_CHAR);
-    game_board[game_board_w*hy+hx].ndx = dhx;
-    game_board[game_board_w*hy+hx].ndy = dhy;
-    game_board[game_board_w*hy+hx].pdx = -dhx;
-    game_board[game_board_w*hy+hx].pdy = -dhy;
+    game_board[board_w*hy+hx].type = Snake;
+    game_board[board_w*hy+hx].p = pcg32_boundedrand(TOTAL_CHAR);
+    game_board[board_w*hy+hx].ndx = dhx;
+    game_board[board_w*hy+hx].ndy = dhy;
+    game_board[board_w*hy+hx].pdx = -dhx;
+    game_board[board_w*hy+hx].pdy = -dhy;
     seed_item(Food);
     ck_press = 0;
     frame = 0;
+    animation_progress = 0.0f;
     new_record = 0;
     game_state = Playing;
     if (Mix_PlayMusic(play_music, -1) == -1) {} /* TODO: might fail - shall we handle this? */
@@ -576,183 +636,265 @@ void resume_play() {
 /* renders whole game state and blits everything to screen */
 void render_screen(void)
 {
-    /* each frame everything is rendered from scratch */
-    int x, y;
-    int foff; /* game board field offset */
-    SDL_Rect DstR = { 0, 0, TILE_SIZE, TILE_SIZE };
-    SDL_Rect SrcR = { 0, 0, TILE_SIZE, TILE_SIZE };
-    char bottom_string[15];
-    int char_frame = 0;
-    int img_w, img_h;
-    /* render game backround with walls */
-    SDL_RenderCopy(renderer, txt_game_board, NULL, NULL);
+    int x,y,l;
+    char txt_buf[40]; /* buffer for rendering text strings */
 
-    if (game_state != GameOver) {
-        char_frame = frame % CHAR_ANIM_FRAMES; /* frame in character animation */
-    }
-    else {
-        char_frame = 0;
-    }
-    /* render snake body and food*/
-    foff = 0; /* offset to game board field */
-    for (y=0; y<game_board_h; y++) {
-        for (x=0; x<game_board_w; x++) {
-            switch(game_board[foff].type) {
-                case Empty:
-                case Wall:
-                    /* empty fields and obstacles were already copied from txt_game_board */
-                    break;
-                case Snake:
-                    /* select direction of character based on snake piece direction */
-                    if (-game_board[foff].pdx == 0 && -game_board[foff].pdy == 1) {
-                        SrcR.x = 0;
-                    }
-                    else if (-game_board[foff].pdx == 1 && -game_board[foff].pdy == 0) {
-                        SrcR.x = TILE_SIZE;
-                    }
-                    else if (-game_board[foff].pdx == 0 && -game_board[foff].pdy == -1) {
-                        SrcR.x = 2*TILE_SIZE;
-                    }
-                    else if (-game_board[foff].pdx == -1 && -game_board[foff].pdy == 0) {
-                        SrcR.x = 3*TILE_SIZE;
-                    }
-                    /* select type of character based on game board field parameter */
-                    SrcR.y = game_board[foff].p*3*(TILE_SIZE+1) + 1;
-                    /* animate character - select animation frame */
-                    if (char_frame == 1) {
-                        SrcR.y += (TILE_SIZE+1);
-                    }
-                    else if (char_frame == 3) {
-                        SrcR.y += 2*(TILE_SIZE+1);
-                    }
-                    /* select character position on screen */
-                    DstR.x = x*TILE_SIZE;
-                    DstR.y = y*TILE_SIZE;
-                    /* animate position of characters between board fields */
-                    if (game_state != GameOver) {
-                        DstR.x += (CHAR_ANIM_FRAMES-char_frame) * game_board[foff].pdx*\
-                                  TILE_SIZE/CHAR_ANIM_FRAMES;
-                        DstR.y += (CHAR_ANIM_FRAMES-char_frame) * game_board[foff].pdy*\
-                                  TILE_SIZE/CHAR_ANIM_FRAMES;
-                    }
-                    /* render character to screen buffer */
-                    SDL_RenderCopy(renderer, txt_char_tileset, &SrcR, &DstR);
-                    break;
-                case Food:
-                    DstR.x = x*TILE_SIZE;
-                    DstR.y = y*TILE_SIZE;
-                    /* blink food item during gameplay */
-                    if (game_state == Playing && frame % (FOOD_BLINK_T*3) < FOOD_BLINK_T) {
-                        if ((frame/3) % 3 == 0) {
-                            SDL_RenderCopy(renderer, txt_food_marker, NULL, &DstR);
-                        }
-                        else if ((frame/3) % 3 == 1) {
-                            SDL_RenderCopy(renderer, txt_food_tileset,
-                                           &food_tile[game_board[foff].p], &DstR);
-                        }
-                        else {
-                            /* don't render anything */
-                        };
-                    }
-                    /* don't blink, just render the food */
-                    else {
-                        SDL_RenderCopy(renderer, txt_food_tileset,
-                                       &food_tile[game_board[foff].p], &DstR);
-                    }
-                    break;
-                default:
-                    break;
+    /* clear screen with black */
+    SDL_SetRenderDrawColor(renderer, 0,0,0, SDL_ALPHA_OPAQUE);
+    SDL_RenderClear(renderer);
+
+    if (game_state == TitleScreen || game_state == OptionsMenu || game_state == KeyConfiguring) {
+        // Common background for Title and Options
+        // Fill with pattern
+        SDL_Rect DstR_bg = { 0, 0, TILE_SIZE, TILE_SIZE };
+        for (y=0; y < screen_h / TILE_SIZE +1; y++) {
+            for (x=0; x < screen_w / TILE_SIZE +1; x++) {
+                DstR_bg.x = x*TILE_SIZE; DstR_bg.y = y*TILE_SIZE;
+                SDL_RenderCopy(renderer, txt_env_tileset, &ground_tile[pcg32_boundedrand(GROUND_TILES)], &DstR_bg);
             }
-            foff++; /* next game board field */
+        }
+        // Dark rectangle
+        int text_height = get_text_height("X");
+        SDL_Rect dark_rect;
+        dark_rect.w = MENU_WIDTH;
+        dark_rect.x = (screen_w - dark_rect.w) / 2;
+        SDL_Rect logo_dst;
+        SDL_QueryTexture(txt_logo, NULL, NULL, &logo_dst.w, &logo_dst.h);
+        
+        if (game_state == TitleScreen) {
+            dark_rect.h = 2*MENU_BORDER + text_height + MENU_LOGO_SPACE + logo_dst.h + MENU_HEAD_SPACE + 
+                         ((title_menu_item_count-1) * MENU_ITEM_HEIGHT);
+            dark_rect.y = (screen_h - dark_rect.h) / 2;
+        } else if (game_state == OptionsMenu || game_state == KeyConfiguring) {
+            dark_rect.h = 2*MENU_BORDER + text_height + MENU_LOGO_SPACE + logo_dst.h + MENU_HEAD_SPACE + 
+                         ((options_menu_item_count-1) * MENU_ITEM_HEIGHT);
+            dark_rect.y = (screen_h - dark_rect.h) / 2;
+        }
+        
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
+        SDL_RenderFillRect(renderer, &dark_rect);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+        // Logo
+        logo_dst.x = screen_w/2 - logo_dst.w/2;
+        logo_dst.y = dark_rect.y + MENU_BORDER;
+        SDL_RenderCopy(renderer, txt_logo, NULL, &logo_dst);
+
+        int current_y = logo_dst.y + logo_dst.h + MENU_LOGO_SPACE;
+
+        if (game_state == TitleScreen) {
+            // Version string
+            sprintf(txt_buf, "version: %s", VERSION_STR);
+            SET_GREY_TEXT;
+            render_text(renderer, txt_font, txt_buf, screen_w/2, current_y, ALIGN_CENTER_HORIZONTAL, ALIGN_CENTER_VERTICAL);
+            current_y += MENU_HEAD_SPACE;
+
+            // Draw Title Menu
+            for (int i = 0; i < title_menu_item_count; i++) {
+                if (i == 0) {
+                    SET_YELLOW_TEXT;
+                } else {
+                    SET_WHITE_TEXT;
+                }
+                title_menu_items[i].rect.w = MENU_ITEM_WIDTH;
+                title_menu_items[i].rect.h = MENU_ITEM_HEIGHT;
+                title_menu_items[i].rect.x = screen_w/2 - MENU_ITEM_WIDTH/2;
+                title_menu_items[i].rect.y = current_y;
+                render_text(renderer, txt_font, title_menu_items[i].text, screen_w/2, current_y + MENU_ITEM_HEIGHT/2, ALIGN_CENTER_HORIZONTAL, ALIGN_CENTER_VERTICAL);
+                if (i == title_menu_selected_item) {
+                    SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+                    SDL_RenderDrawRect(renderer, &title_menu_items[i].rect);
+                }
+                current_y += MENU_ITEM_HEIGHT;
+            }
+        } else if (game_state == OptionsMenu || game_state == KeyConfiguring) {
+            // "Options" title
+            SET_GREY_TEXT;
+            render_text(renderer, txt_font, "Options", screen_w/2, current_y, ALIGN_CENTER_HORIZONTAL, ALIGN_CENTER_VERTICAL);
+            current_y += MENU_HEAD_SPACE;
+
+            // Draw Options Menu
+            SET_WHITE_TEXT;
+            for (int i = 0; i < options_menu_item_count; i++) {
+                char item_text_buf[100];
+                SET_WHITE_TEXT;
+                if (options_menu_items[i].is_key_config) {
+                    const char* key_name = SDL_GetKeyName(*(options_menu_items[i].key_to_configure));
+                    if (game_state == KeyConfiguring && configuring_key_item_index == i) {
+                         sprintf(item_text_buf, "%s ...", options_menu_items[i].config_label);
+                    }
+                     else {
+                         sprintf(item_text_buf, "%s %s", options_menu_items[i].config_label, key_name);
+                    }
+                } else if (options_menu_items[i].action == menu_action_toggle_music) {
+                    sprintf(item_text_buf, "Music: %s", music_on ? "ON" : "OFF");
+                } else if (options_menu_items[i].action == menu_action_toggle_sfx) {
+                    sprintf(item_text_buf, "Sound effects: %s", sfx_on ? "ON" : "OFF");
+                } else if (options_menu_items[i].action == menu_action_toggle_fullscreen) {
+                    sprintf(item_text_buf, "Display: %s", fullscreen ? "fullscreen" : "window");
+                } else {
+                    if (options_menu_items[i].action == NULL) {
+                        SET_GREY_TEXT;
+                    }
+                    sprintf(item_text_buf, "%s", options_menu_items[i].text);
+                }
+
+                options_menu_items[i].rect.w = MENU_ITEM_WIDTH;
+                options_menu_items[i].rect.h = MENU_ITEM_HEIGHT;
+                options_menu_items[i].rect.x = screen_w/2 - MENU_ITEM_WIDTH/2;
+                options_menu_items[i].rect.y = current_y;
+                if (i == options_menu_item_count-1) {
+                    SET_YELLOW_TEXT;
+                }
+                render_text(renderer, txt_font, item_text_buf, screen_w/2, current_y + MENU_ITEM_HEIGHT/2, ALIGN_CENTER_HORIZONTAL, ALIGN_CENTER_VERTICAL);
+
+                if (i == options_menu_selected_item) {
+                    SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+                    SDL_RenderDrawRect(renderer, &options_menu_items[i].rect);
+                }
+                current_y += MENU_ITEM_HEIGHT;
+            }
         }
     }
+    else if (game_state == Playing || game_state == Paused || game_state == GameOver) {
+        SDL_RenderCopy(renderer, txt_game_board, NULL, NULL);
 
-    int yc;
-    /* Extra elements dependent on current game state. */
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    switch (game_state) {
-        case NotStarted:
-            /* "First start" screen */
-            SDL_QueryTexture(txt_logo, NULL, NULL, &img_w, &img_h);
-            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);
-            DstR.w = 16*TILE_SIZE;        DstR.h = (2+8.5)*TILE_SIZE+img_h;
-            yc = (screen_h-TILE_SIZE-DstR.h)/2;
-            DstR.x = (screen_w-DstR.w)/2; DstR.y = yc;
-            SDL_RenderFillRect(renderer, &DstR);
-            yc += TILE_SIZE;
-            DstR.w = img_w;              DstR.h = img_h;
-            DstR.x = (screen_w-DstR.w)/2; DstR.y = yc;
-            SDL_RenderCopy(renderer, txt_logo, NULL, &DstR);
-            yc += img_h;
-            SET_GREY_TEXT;
-            render_text(screen_w/2,    yc,             Center, "Version: "VERSION_STR);
-            yc += TILE_SIZE;
-            SET_YELLOW_TEXT;
-            render_text(screen_w/2-32, yc,             Right, "Arrows:");
-            render_text(screen_w/2-32, yc+TILE_SIZE,   Right, "SPACE:");
-            render_text(screen_w/2-32, yc+2*TILE_SIZE, Right, "Z:");
-            render_text(screen_w/2-32, yc+3*TILE_SIZE, Right, "X:");
-            render_text(screen_w/2-32, yc+4*TILE_SIZE, Right, "S:");
-            render_text(screen_w/2-32, yc+5*TILE_SIZE, Right, "ESC:");
-            SET_GREY_TEXT;
-            render_text(screen_w/2-32, yc,             Left, " Snake control");
-            render_text(screen_w/2-32, yc+TILE_SIZE,   Left, " Pause/Resume");
-            render_text(screen_w/2-32, yc+2*TILE_SIZE, Left, " Music");
-            render_text(screen_w/2-32, yc+3*TILE_SIZE, Left, " Sound effects");
-            render_text(screen_w/2-32, yc+4*TILE_SIZE, Left, " Window/Full");
-            render_text(screen_w/2-32, yc+5*TILE_SIZE, Left, " Quit");
-            SET_WHITE_TEXT;
-            render_text(screen_w/2,    yc+6.5*TILE_SIZE, Center, "Press SPACE to play");
-            break;
-        case GameOver:
-            /* "Game Over" screen */
-            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);
-            SDL_QueryTexture(txt_trophy, NULL, NULL, &img_w, &img_h);
-            DstR.w = 16*TILE_SIZE;
-            DstR.h = new_record ? 6*TILE_SIZE+img_h : 4.5*TILE_SIZE;
-            yc = (screen_h-TILE_SIZE-DstR.h)/2;
-            DstR.x = (screen_w-DstR.w)/2; DstR.y = yc;
-            SDL_RenderFillRect(renderer, &DstR);
-            yc += TILE_SIZE;
-            SET_WHITE_TEXT;
-            render_text(screen_w/2, yc, Center, "Game Over");
-            yc += 1.5*TILE_SIZE;
-            if (new_record) {
-                DstR.w = img_w;               DstR.h = img_h;
-                DstR.x = (screen_w-DstR.w)/2; DstR.y = yc;
-                SDL_RenderCopy(renderer, txt_trophy, NULL, &DstR);
-                yc += DstR.h;
-                if (frame%15<10) {
-                    SET_YELLOW_TEXT;
-                    render_text(screen_w/2, yc, Center, "NEW HI SCORE !");
+        int x, y;
+        int foff; /* game board field offset */
+        SDL_Rect DstR = { 0, 0, TILE_SIZE, TILE_SIZE };
+        SDL_Rect SrcR = { 0, 0, TILE_SIZE, TILE_SIZE };
+        /* render snake body and food*/
+        foff = 0; /* offset to game board field */
+        for (y=0; y<board_h; y++) {
+            for (x=0; x<board_w; x++) {
+                switch(game_board[foff].type) {
+                    case Empty:
+                    case Wall:
+                        /* empty fields and obstacles were already copied from txt_game_board */
+                        break;
+                    case Snake:
+                        /* select direction of character based on snake piece direction */
+                        if (-game_board[foff].pdx == 0 && -game_board[foff].pdy == 1) {
+                            SrcR.x = 0;
+                        }
+                        else if (-game_board[foff].pdx == 1 && -game_board[foff].pdy == 0) {
+                            SrcR.x = TILE_SIZE;
+                        }
+                        else if (-game_board[foff].pdx == 0 && -game_board[foff].pdy == -1) {
+                            SrcR.x = 2*TILE_SIZE;
+                        }
+                        else if (-game_board[foff].pdx == -1 && -game_board[foff].pdy == 0) {
+                            SrcR.x = 3*TILE_SIZE;
+                        }
+                        /* select type of character based on game board field parameter */
+                        SrcR.y = game_board[foff].p*3*(TILE_SIZE+1) + 1;
+                        /* animate character - select animation frame */
+                        int anim_frame = (int)(animation_progress * CHAR_ANIM_FRAMES);
+                        if (anim_frame == 1) {
+                            SrcR.y += (TILE_SIZE+1);
+                        }
+                        else if (anim_frame == 3) {
+                            SrcR.y += 2*(TILE_SIZE+1);
+                        }
+                        /* select character position on screen */
+                        DstR.x = x*TILE_SIZE;
+                        DstR.y = y*TILE_SIZE;
+                        /* animate position of characters between board fields */
+                        if (game_state != GameOver) {
+                            DstR.x += (1.0f - animation_progress) * game_board[foff].pdx * TILE_SIZE;
+                            DstR.y += (1.0f - animation_progress) * game_board[foff].pdy * TILE_SIZE;
+                        }
+                        /* render character to screen buffer */
+                        SDL_RenderCopy(renderer, txt_char_tileset, &SrcR, &DstR);
+                        break;
+                    case Food:
+                        DstR.x = x*TILE_SIZE;
+                        DstR.y = y*TILE_SIZE;
+                        /* blink food item during gameplay */
+                        if (game_state == Playing && frame % (FOOD_BLINK_FRAMES*3) < FOOD_BLINK_FRAMES) {
+                            if ((frame/3) % 3 == 0) {
+                                SDL_RenderCopy(renderer, txt_food_marker, NULL, &DstR);
+                            }
+                            else if ((frame/3) % 3 == 1) {
+                                SDL_RenderCopy(renderer, txt_food_tileset,
+                                            &food_tile[game_board[foff].p], &DstR);
+                            }
+                            else {
+                                /* don't render anything */
+                            };
+                        }
+                        /* don't blink, just render the food */
+                        else {
+                            SDL_RenderCopy(renderer, txt_food_tileset,
+                                        &food_tile[game_board[foff].p], &DstR);
+                        }
+                        break;
+                    default:
+                        break;
                 }
-                yc += 1.5*TILE_SIZE;
+                foff++; /* next game board field */
             }
-            SET_GREY_TEXT;
-            render_text(screen_w/2, yc, Center, "Press SPACE to play again");
-            break;
-        case Playing:
-            break;
-        case Paused:
-            SET_WHITE_TEXT;
-            render_text(screen_w/2, screen_h/2-TILE_SIZE, Center, "Pause");
-            break;
-        default:
-            break;
+        }
+
+        int yc;
+        /* Extra elements dependent on current game state. */
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        switch (game_state) {
+            case GameOver:
+                /* "Game Over" screen */
+                int text_height = get_text_height("X");
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 127);
+                SDL_QueryTexture(txt_trophy, NULL, NULL, &l, &l);
+                DstR.w = GAME_OVER_WIDTH;
+                DstR.h = 2*GAME_OVER_BORDER + 2*text_height + GAME_OVER_ITEM_SPACE;
+                if (new_record) {
+                    DstR.h += l + text_height +2*GAME_OVER_ITEM_SPACE;
+                }
+                yc = (screen_h-TILE_SIZE-DstR.h)/2;
+                DstR.x = (screen_w-DstR.w)/2; DstR.y = yc;
+                SDL_RenderFillRect(renderer, &DstR);
+                yc += GAME_OVER_BORDER + text_height/2;
+                SET_WHITE_TEXT;
+                render_text(renderer, txt_font, "Game Over", screen_w/2, yc, ALIGN_CENTER_HORIZONTAL, ALIGN_CENTER_VERTICAL);
+                if (new_record) {
+                    yc += text_height/2 + GAME_OVER_ITEM_SPACE;
+                    DstR.w = l;               DstR.h = l;
+                    DstR.x = (screen_w-DstR.w)/2; DstR.y = yc;
+                    SDL_RenderCopy(renderer, txt_trophy, NULL, &DstR);
+                    yc += DstR.h + text_height/2 + GAME_OVER_ITEM_SPACE;
+                    if (frame%15<10) {
+                        SET_YELLOW_TEXT;
+                        render_text(renderer, txt_font, "NEW HI SCORE !", screen_w/2, yc, ALIGN_CENTER_HORIZONTAL, ALIGN_CENTER_VERTICAL);
+                    }
+                }
+                yc += text_height + GAME_OVER_ITEM_SPACE;
+                SET_GREY_TEXT;
+                render_text(renderer, txt_font, "Press SPACE", screen_w/2, yc, ALIGN_CENTER_HORIZONTAL, ALIGN_CENTER_VERTICAL);
+                break;
+            case Paused:
+                SET_WHITE_TEXT;
+                render_text(renderer, txt_font, "Pause", screen_w/2, screen_h/2-TILE_SIZE, ALIGN_CENTER_HORIZONTAL, ALIGN_CENTER_VERTICAL);
+                break;
+            default:
+                break;
+        }
+        /* print score, hi score and music/sound effects state*/
+        SET_WHITE_TEXT;
+        sprintf(txt_buf, "HI SCORE: %d", hi_score);
+        render_text(renderer, txt_font, txt_buf, TILE_SIZE, board_h*TILE_SIZE, ALIGN_LEFT, ALIGN_TOP);
+        sprintf(txt_buf, "SCORE: %d", score);
+        render_text(renderer, txt_font, txt_buf, screen_w-TILE_SIZE, board_h*TILE_SIZE, ALIGN_RIGHT, ALIGN_TOP);
+        SET_GREY_TEXT;
+        if (music_on) {
+            render_text(renderer, txt_font, "Music ", screen_w/2, board_h*TILE_SIZE, ALIGN_RIGHT, ALIGN_TOP);
+        }
+        if (sfx_on) {
+            render_text(renderer, txt_font, "  SFX", screen_w/2, board_h*TILE_SIZE, ALIGN_LEFT, ALIGN_TOP);
+        }
+        SDL_RenderPresent(renderer);
     }
-    /* print score, hi score and music/sound effects state*/
-    SET_WHITE_TEXT;
-    sprintf(bottom_string, "HI SCORE: %d", hi_score);
-    render_text(TILE_SIZE, game_board_h*TILE_SIZE, Left, bottom_string);
-    sprintf(bottom_string, "SCORE: %d", score);
-    render_text(screen_w-TILE_SIZE, game_board_h*TILE_SIZE, Right, bottom_string);
-    SET_GREY_TEXT;
-    if (music_on) {
-        render_text(screen_w/2, game_board_h*TILE_SIZE, Right, "Music ");
-    }
-    if (sfx_on) {
-        render_text(screen_w/2, game_board_h*TILE_SIZE, Left, "  SFX");
-    }
+
     SDL_RenderPresent(renderer);
 }
 
@@ -760,111 +902,256 @@ void render_screen(void)
 /*############ MAIN GAME LOOP #############*/
 int main(int argc, char ** argv)
 {
-    int quit = 0;
     SDL_Event event;
 
-    /* basic game configuration */
-    if (init_game(WINDOW_W, WINDOW_H, fullscreen)) {
-        /* Error during init. Terminating game. */
-        quit = 1;
-    }
-    else {
-        render_screen();
-    }
+    game_state = NotInitialized;
+    if (init_game_engine(screen_w, screen_h, fullscreen)) return 1;
 
-    while (!quit)
-    {
-        SDL_WaitEvent(&event);
-        switch (event.type)
-        {
-            case SDL_USEREVENT: /* game tick event */
-                if (game_state == Paused) {
-                    /* animations are played in every state except "Paused" */
-                    break;
+    game_state = TitleScreen; // Initialize to TitleScreen
+    if (music_on) Mix_PlayMusic(idle_music, -1);
+
+    /* Start timer for generating SDL_USEREVENT events for screen frame rendering */
+    game_timer = SDL_AddTimer(RENDER_INTERVAL, tick_callback, 0);
+
+    while (game_state != NotInitialized) { /* main game loop */
+        while (SDL_PollEvent(&event)) { /* process pending events */
+            switch (event.type) {
+            case SDL_USEREVENT: /* next frame event */
+                // Update game state at a fixed rate
+                if (game_state == Playing || game_state == GameOver) {
+                    frame++;
                 }
-                frame++;
                 if (game_state == Playing) {
-                    /* play state update and animations if playing */
-                    if (frame % CHAR_ANIM_FRAMES == 0) { /* updated play state frame */
-                        /* update play state */
+                    if (frame % CHAR_ANIM_FRAMES == 0) {
                         update_play_state();
                     }
-                    /* render each frame - both animations and "full" updated play state frames */
-                    render_screen();
+                // Calculate animation progress between updates
+                    animation_progress = (frame % CHAR_ANIM_FRAMES)/(double)CHAR_ANIM_FRAMES;
                 }
-                else if (game_state == GameOver) {
-                    render_screen();
+                // Always render, regardless of state, to show menus or game
+                render_screen();
+                break;
+            case SDL_MOUSEBUTTONDOWN:
+                if (event.button.button == SDL_BUTTON_LEFT) {
+                    int mouse_x = event.button.x;
+                    int mouse_y = event.button.y;
+                    if (game_state == TitleScreen) {
+                        for (int i = 0; i < title_menu_item_count; i++) {
+                            if (mouse_x >= title_menu_items[i].rect.x && mouse_x <= title_menu_items[i].rect.x + title_menu_items[i].rect.w &&
+                                mouse_y >= title_menu_items[i].rect.y && mouse_y <= title_menu_items[i].rect.y + title_menu_items[i].rect.h) {
+                                title_menu_selected_item = i; // Visually select
+                                if (title_menu_items[i].action) title_menu_items[i].action();
+                                break;
+                            }
+                        }
+                    } else if (game_state == OptionsMenu) {
+                        for (int i = 0; i < options_menu_item_count; i++) {
+                            if (mouse_x >= options_menu_items[i].rect.x && mouse_x <= options_menu_items[i].rect.x + options_menu_items[i].rect.w &&
+                                mouse_y >= options_menu_items[i].rect.y && mouse_y <= options_menu_items[i].rect.y + options_menu_items[i].rect.h) {
+                                options_menu_selected_item = i; // Visually select
+                                if (options_menu_items[i].is_key_config) {
+                                    configuring_key_item_index = i;
+                                    menu_action_configure_key(&options_menu_items[i]);
+                                } else if (options_menu_items[i].action) {
+                                    options_menu_items[i].action();
+                                }
+                                break;
+                            }
+                        }
+                    }
                 }
                 break;
             case SDL_KEYDOWN:
+                ck_press = 0; // Reset control key press indicator for game state
                 if (event.key.keysym.sym == SDLK_ESCAPE) {
-                    quit = 1;
-                }
-                else if (event.key.keysym.sym == SDLK_SPACE) {
-                    switch (game_state) {
-                        case NotStarted:
-                        case GameOver:
-                            /* start new play */
-                            start_play();
-                            render_screen();
-                            break;
-                        case Playing:
-                            /* pause play */
-                            pause_play();
-                            render_screen();
-                            break;
-                        case Paused:
-                            /* resume play */
-                            resume_play();
-                            break;
-                        default:
-                            break;
+                    if (game_state == KeyConfiguring) {
+                        game_state = OptionsMenu;
+                        configuring_key_item_index = -1;
+                    } else if (game_state == OptionsMenu) {
+                        menu_action_back_to_title();
+                    } else {
+                        menu_action_exit();
                     }
+                    break;
                 }
-                else if (event.key.keysym.sym == SDLK_z && event.key.repeat == 0) {
-                    /* toggle music on/off */
-                    music_on = !music_on;
-                    render_screen();
-                    if (game_state != Paused) {
-                        if (music_on) {
-                            Mix_ResumeMusic();
-                        }
-                        else {
-                            Mix_PauseMusic();
-                        }
+                if (game_state == KeyConfiguring) {
+                    // Check for conflicts
+                    SDL_KeyCode pressed_key = event.key.keysym.sym;
+                    int conflict = 0;
+                    if (pressed_key == key_left && options_menu_items[configuring_key_item_index].key_to_configure != &key_left) conflict = 1;
+                    else if (pressed_key == key_right && options_menu_items[configuring_key_item_index].key_to_configure != &key_right) conflict = 1;
+                    else if (pressed_key == key_up && options_menu_items[configuring_key_item_index].key_to_configure != &key_up) conflict = 1;
+                    else if (pressed_key == key_down && options_menu_items[configuring_key_item_index].key_to_configure != &key_down) conflict = 1;
+                    else if (pressed_key == key_pause && options_menu_items[configuring_key_item_index].key_to_configure != &key_pause) conflict = 1;
+                    
+                    // Also check against other menu navigation/activation keys if necessary
+                    if (pressed_key == SDLK_RETURN || pressed_key == SDLK_KP_ENTER || pressed_key == SDLK_SPACE ||
+                        pressed_key == SDLK_UP || pressed_key == SDLK_DOWN) {
+                        conflict = 1;
                     }
-                }
-                else if (event.key.keysym.sym == SDLK_x && event.key.repeat == 0) {
-                    /* toggle sound effects on/off */
-                    sfx_on = !sfx_on;
-                    render_screen();
-                }
-                else if (event.key.keysym.sym == SDLK_s && event.key.repeat == 0 &&
-                        (game_state == NotStarted || game_state == NotInitialized)) {
-                    /* toggle display between windowed/fullscreen modes */
-                    fullscreen = !fullscreen;
-                    if (init_game(WINDOW_W, WINDOW_H, fullscreen)) {
-                        quit = 1;
+
+                    if (!conflict && configuring_key_item_index != -1) {
+                        *(options_menu_items[configuring_key_item_index].key_to_configure) = pressed_key;
                     }
-                    else {
-                        SDL_Delay(50);
-                        render_screen();
-                    }
-                }
-                else if (game_state == Playing && event.key.repeat == 0 && ck_press == 0) {
+                    game_state = OptionsMenu;
+                    configuring_key_item_index = -1;
+                } else if (game_state == TitleScreen) {
                     switch (event.key.keysym.sym) {
-                        case SDLK_LEFT:  if (dhx == 0) { dhx = -1; dhy = 0; ck_press = 1; } break;
-                        case SDLK_RIGHT: if (dhx == 0) { dhx = 1; dhy = 0; ck_press = 1; } break;
-                        case SDLK_UP:    if (dhy == 0) { dhx = 0; dhy = -1; ck_press = 1; } break;
-                        case SDLK_DOWN:  if (dhy == 0) { dhx = 0; dhy = 1; ck_press = 1; } break;
+                    case SDLK_UP:
+                        title_menu_selected_item = (title_menu_selected_item - 1 + title_menu_item_count) % title_menu_item_count;
+                        break;
+                    case SDLK_DOWN:
+                        title_menu_selected_item = (title_menu_selected_item + 1) % title_menu_item_count;
+                        break;
+                    case SDLK_RETURN:
+                    case SDLK_KP_ENTER:
+                    case SDLK_SPACE:
+                        if (title_menu_items[title_menu_selected_item].action) {
+                            title_menu_items[title_menu_selected_item].action();
+                        }
+                        break;
+                    default:
+                        break;
+                    }
+                } else if (game_state == OptionsMenu) {
+                    switch (event.key.keysym.sym) {
+                    case SDLK_UP:
+                        options_menu_selected_item = (options_menu_selected_item - 1 + options_menu_item_count) % options_menu_item_count;
+                        break;
+                    case SDLK_DOWN:
+                        options_menu_selected_item = (options_menu_selected_item + 1) % options_menu_item_count;
+                        break;
+                    case SDLK_RETURN:
+                    case SDLK_KP_ENTER:
+                    case SDLK_SPACE:
+                        if (options_menu_items[options_menu_selected_item].is_key_config) {
+                            configuring_key_item_index = options_menu_selected_item;
+                            menu_action_configure_key(&options_menu_items[options_menu_selected_item]);
+                        } else if (options_menu_items[options_menu_selected_item].action) {
+                            options_menu_items[options_menu_selected_item].action();
+                        }
+                        break;
+                    default:
+                        break;
+                    }
+                } else if (game_state == Playing) {
+                    if (event.key.keysym.sym == key_pause) {
+                        pause_play();
+                    } else if (event.key.repeat == 0 && ck_press == 0) { // ck_press ensures one direction change per key press
+                        if (event.key.keysym.sym == key_left) { if (dhx == 0) { dhx = -1; dhy = 0; ck_press = 1; } }
+                        else if (event.key.keysym.sym == key_right) { if (dhx == 0) { dhx = 1; dhy = 0; ck_press = 1; } }
+                        else if (event.key.keysym.sym == key_up) { if (dhy == 0) { dhx = 0; dhy = -1; ck_press = 1; } }
+                        else if (event.key.keysym.sym == key_down) { if (dhy == 0) { dhx = 0; dhy = 1; ck_press = 1; } }
+                    }
+                } else if (game_state == Paused) {
+                    if (event.key.keysym.sym == key_pause) {
+                        resume_play();
+                    }
+                } else if (game_state == GameOver) {
+                    if (event.key.keysym.sym == SDLK_SPACE) {
+                        game_state = TitleScreen; // Go to title screen
+                        title_menu_selected_item = 0;
+                        if (music_on && Mix_PlayingMusic() == 0) { // Resume idle music if it stopped
+                            Mix_PlayMusic(idle_music, -1);
+                        }
                     }
                 }
                 break;
-            case SDL_QUIT:
-                quit = 1;
+            case SDL_QUIT: /* window closed */
+                game_state = NotInitialized;
                 break;
+            default: /* ignore other events */
+                break;
+            }
         }
+        SDL_Delay(10); /* loop limiter, give some CPU cycles to other processes */
     }
+
     cleanup_game();
     return 0;
+}
+
+// Implementation of menu actions
+void menu_action_play(void) {
+    start_play();
+}
+
+void menu_action_options(void) {
+    game_state = OptionsMenu;
+    options_menu_selected_item = 0; // Reset selection when entering options
+}
+
+void menu_action_exit(void) {
+    game_state = NotInitialized; // This will lead to cleanup and exit in main loop
+}
+
+void menu_action_back_to_title(void) {
+    game_state = TitleScreen;
+    title_menu_selected_item = 0; // Reset selection
+}
+
+void menu_action_toggle_music(void) {
+    music_on = !music_on;
+    if (music_on) {
+        if (game_state == TitleScreen || game_state == OptionsMenu) Mix_PlayMusic(idle_music, -1);
+        else if (game_state == Playing) Mix_PlayMusic(play_music, -1);
+    } else {
+        Mix_HaltMusic();
+    }
+}
+
+void menu_action_toggle_sfx(void) {
+    sfx_on = !sfx_on;
+}
+
+void menu_action_toggle_fullscreen(void) {
+    fullscreen = !fullscreen;
+    
+    // Store current game state
+    GameState prev_state = game_state;
+    
+    // Temporarily set to NotStarted to allow proper reinitialization
+    game_state = NotStarted;
+    
+    // Create display area based on new mode
+    if (fullscreen) {
+        if (create_fullscreen_display()) return;
+    } 
+    else if (create_windowed_display()) return;
+    
+    // Destroy and recreate the game board texture
+    if (txt_game_board) {
+        SDL_DestroyTexture(txt_game_board);
+    }
+    txt_game_board = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+                    SDL_TEXTUREACCESS_TARGET, screen_w, screen_h);
+    if (!txt_game_board) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "Error creating background texture", SDL_GetError(), NULL);
+        return;
+    }
+    
+    // Reallocate game board array if needed
+    if (game_board) {
+        free(game_board);
+    }
+    game_board = calloc(board_w * board_h, sizeof(BoardField));
+    if (!game_board) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+            "Error", "Error allocating memory", NULL);
+        return;
+    }
+    
+    // Reinitialize the game board
+    init_game_board();
+    
+    // Restore previous game state
+    game_state = prev_state;
+}
+
+void menu_action_configure_key(MenuItem* item) {
+    if (item && item->is_key_config) {
+        game_state = KeyConfiguring;
+        // The actual key configuration will be handled in the event loop for KeyConfiguring state
+    }
 }

@@ -1,0 +1,24 @@
+Stick to all currently used technologies/programming languages. Do not introduce new ones. Use currently used graphics and sound assets. All text shall be printed using the same function and the same font as it is now. 
+
+Keep current overall look of current title screen:  logo, version string and background(pattern and dark rectangle) shall remain. All other text on title screen shall be replaced with vertical menu consisting of following buttons: "Play", "Options" and "Exit". Menu shall be below logo and version string and centered horizontally with them. Buttons shall be clickable with mouse and navigable with arrow keys. When navigating with arrow keys, selected button shall have thin white border. Activation of selected button shall be done with left-click or Enter or Space key. Button "Play" shall start the game. Button "Exit" shall quit the game. Button "Options" shall open options screen.
+
+In options screen background and logo shall be the same as in the title screen. Instead of version string it should say "Options". Below should be a vertical list of centered horizontally entries, navigated the same way as in title screen. Each entry is for either configuring one of the keys used in game or toggling some functionality. Entries used for configuring keys shall follow pattern: First string describing functionality(right aligned), then string for currently configured key(left aligned). When key-config entry is activated, its key string shall be cleaned and program shall wait for user to press a new key. After user presses key, key string shall be updated accordingly. If user tries to use for some configuration setting a key that is already used for some other setting, that new setting shall be ignored.
+
+Entries for toggling functionalities shall have immediate effect upon activating them.
+
+Options screen shall contain following entries:
+"Left:" - for left direction key
+"Right:" - for right direction key
+"Up:" - for up direction key
+"Down:" - for down direction key
+"Pause:" - for pause/unpause key
+"Set music ON/OFF" - for toggling music
+"Set sound effects ON/OFF" - for toggling sound effects
+"Set window mode/Fullscreen" - for toggling between windowed and fullscreen mode
+"Back" - for going back to title screen
+Strings in toggling entries should reflect what will happen AFTER using them, i.e. if music is currently off, entry should say "Set music ON".
+
+Control of the snake during game shall be done with direction keys configured in options screen. Pause/unpause key shall have effect only during game. Currently exisiting changes to sound effects/music/display settings done directly with key presses shall be removed(along with their descriptions in title screen). It shall be possible to change sound effects/music/display settings only inside options screen.
+
+In game over screen message shall be changed from "Press SPACE to play again" to "Press SPACE". Pressing space in game over screen shall move user to title screen.
+

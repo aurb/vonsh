@@ -4,3 +4,5 @@ debian/files
 debian/vonsh
 debian/vonsh.substvars
 debian/.debhelper
+obj
+usr/games
