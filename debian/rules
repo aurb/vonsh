@@ -1,8 +1,21 @@
 #!/usr/bin/make -f
 
 #export DH_VERBOSE=1
+export DEB_BUILD_MAINT_OPTIONS=hardening=+all
+export DEB_CFLAGS_MAINT_APPEND=-g
+export DEB_LDFLAGS_MAINT_APPEND=-Wl,--as-needed
+
 include /usr/share/dpkg/pkg-info.mk
 export VERSION_STR=$(DEB_VERSION)
 
+# Do not strip.
+export STRIP=true
+
 %:
 	dh $@
+
+override_dh_auto_build:
+	$(MAKE) debug
+
+override_dh_builddeb:
+	dh_builddeb -- -Zxz

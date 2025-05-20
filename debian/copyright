@@ -4,8 +4,8 @@ Upstream-Contact: Andrzej Urbaniak <au742582@interia.pl>
 Source: https://github.com/aurb/vonsh/
 
 Files: *
-Copyright: 2019 Andrzej Urbaniak
-License: MIT
+Copyright: 2019-2025 Andrzej Urbaniak
+License: Expat
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
  in the Software without restriction, including without limitation the rights
@@ -26,7 +26,7 @@ License: MIT
 
 Files: inc/pcg_basic.h src/pcg_basic.c
 Copyright: 2014 Melissa O'Neill <oneill@pcg-random.org>
-License: Apache-License-Version-2.0
+License: Apache-2.0
  /usr/share/common-licenses/Apache-2.0
 
 Files: usr/share/games/vonsh/board_tiles.png
@@ -383,3 +383,4 @@ License: CC-BY-3.0
      this trademark restriction does not form part of this License.
  .
      Creative Commons may be contacted at https://creativecommons.org/.
+

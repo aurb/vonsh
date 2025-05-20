@@ -1,3 +1,34 @@
+vonsh (1.1-1) unstable; urgency=medium
+
+  * Added user menu navigated with keyboard and/or mouse
+  * Added a support for changing the board size or switching to full screen
+  * Added configurable gameplay keys
+  * Music and sound effects are now toggled from the user menu
+  * Added highscore saving with "Hall of fame"
+  * Added storage of user configuration and highscore table
+  * Added optional fps counter
+  * nostrip in a cross-buildable way
+
+ -- Andrzej Urbaniak <au742582@interia.pl>  Thu, 09 Oct 2025 16:41:06 +0200
+
+vonsh (1.0+ds-0.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Drop unnecessary version constraints for Build-Dependencies.
+  * debian/copyright: Align license names with Debian requirements.
+  * Add version suffix +ds to make the version greater than bookworm's.
+    (Closes: #1057155)
+
+ -- Bastian Germann <bage@debian.org>  Sun, 03 Dec 2023 22:34:55 +0100
+
+vonsh (1.0-0.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Drop build-essential packages from Build-Depends. (Closes: #949218)
+  * Convert to source format 3.0. (Closes: #1007398)
+
+ -- Bastian Germann <bage@debian.org>  Mon, 23 Oct 2023 00:25:29 +0200
+
 vonsh (1.0) unstable; urgency=medium
 
   * Initial packaging. Closes: #935761

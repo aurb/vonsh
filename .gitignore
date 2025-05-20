@@ -1,6 +1,12 @@
+.*
+!.gitignore
+!.gitattributes
 *.swp
 *.log
 debian/files
 debian/vonsh
 debian/vonsh.substvars
 debian/.debhelper
+debian/debhelper-build-stamp
+obj
+usr/games

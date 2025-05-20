@@ -1,0 +1,15 @@
+{
+  "window_board_w": 40,
+  "window_board_h": 30,
+  "fullscreen": false,
+  "music_on": true,
+  "sfx_on": true,
+  "key_left": "Left",
+  "key_right": "Right",
+  "key_up": "Up",
+  "key_down": "Down",
+  "key_pause": "Space"
+}
+
+
+

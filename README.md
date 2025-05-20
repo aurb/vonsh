@@ -1,59 +1,76 @@
-# Vonsh
+# Vonsh 1.1
 Snake-like game for Linux based on libSDL
 
 https://github.com/aurb/vonsh/
 
 ## Depedencies
 Package dependencies:
-+ libc6 (>= 2.2.5)
-+ libsdl2-2.0-0 (>= 2.0.9)
-+ libsdl2-image-2.0-0 (>= 2.0.2)
-+ libsdl2-mixer-2.0-0 (>= 2.0.2)
++ SDL 2
++ SDL\_image 2
++ SDL\_mixer 2
++ SDL\_ttf 2
++ cJSON
 
 Build dependencies:
-+ libc6-dev (>=2.28)
-+ gcc (>=4:8.3.0)
-+ g++ (>=4:8.3.0)
-+ make (>=4.2.1)
-+ dpkg-dev (>=1.19.7)
-+ debhelper (>= 12)
-+ libsdl2-dev (>=2.0.9)
-+ libsdl2-image-dev (>=2.0.4)
-+ libsdl2-mixer-dev (>=2.0.4)
++ build-essential
++ debhelper (= 13)
++ libsdl2-dev
++ libsdl2-image-dev
++ libsdl2-mixer-dev
++ libsdl2-ttf-dev
++ libcjson-dev
+
+## Changes from 1.0
++ Added user menu navigated with keyboard and/or mouse
++ Added a support for changing the board size or switching to full screen
++ Added configurable gameplay keys
++ Music and sound effects are now toggled from the user menu
++ Added highscore saving with "Hall of fame"
++ Added storage of user configuration and highscore table
++ Added optional fps counter
 
 ## How to build and install
-Commands to be executed from project root directory:
+Commands to be executed from the project root directory:
 
-To build development release executable(optimization ON, debug symbols OFF) **./usr/games/vonsh**:
+To build the release executable(optimization ON, debug symbols OFF) **./usr/games/vonsh**:
 > make release
 
-To build development debug executable(optimization OFF, debug symbols ON) **./usr/games/vonsh**:
+To build the debug executable(optimization OFF, debug symbols ON) **./usr/games/vonsh**:
 > make debug
 
 To clean project:
 > make clean
 
-To build Debian full installation package **../vonsh\_1.0\_arch.deb**:
-> dpkg-buildpackage -b -uc
+To build Debian installation package:
+> make deb_build
 
-To install that package:
-> sudo dpkg -i ../vonsh\_1.0\_arch.deb
+To install resulting package:
+> sudo dpkg -i ../vonsh\_1.1\_arch.deb
+
+To clean all products of Debian package build:
+> make deb_clean
+
+REMARK: in the resulting Debian package name replace "arch" with your architecture suffix
 
 ## How to play
-If game is installed from package - click "Vonsh" icon in your system menu or type "vonsh" in console.
+If the game is installed from a package - click the "Vonsh" icon in your system menu or type "vonsh" in the terminal.
 
-If only executable is compiled - from project directory type "./usr/games/vonsh".
+If the project was built independently, type ./usr/games/vonsh from the project directory.
 
-Use arrow keys to move snake. Eat food, avoid obstacles and screen edges.
+The game can be configured and started from a (hopefully) self-explanatory menu. The configurable settings are available in the "Options" menu. The minimum allowed board dimensions are 28x28.
 
-SPACE to pause/unpause, ESC to quit.
+During the gameplay control the snake using the directional keys (or other of your choice).
 
-Music and sound effects can be toggled with Z and X.
+The current game configuration is permanently stored in the ~/.local/share/vonsh/config.json file.
+
+The highscore list is permanently stored in the ~/.local/share/vonsh/hiscore.json file.
 
 ## Authors
 ### Code
 + Andrzej Urbaniak https://github.com/aurb/
++ Sam Lantinga https://github.com/libsdl-org/SDL
 + PCG Random Number Generation http://www.pcg-random.org
++ cJSON Dave Gamble and cJSON contributors https://github.com/DaveGamble/cJSON
 
 ### Graphics
 + Beast https://opengameart.org/content/overworld-grass-biome
@@ -72,9 +89,17 @@ Music and sound effects can be toggled with Z and X.
 Music licensed under CC-BY 3.0 https://creativecommons.org/licenses/by/3.0/
 
 ## License
++ Simple DirectMedia Layer
+    + Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+    + License: ZLib
+
 + PCG Random Number Generation, Files: inc/pcg_basic.h src/pcg_basic.c
     + Copyright: 2014 Melissa O'Neill <oneill@pcg-random.org>
     + License: Apache License, Version 2.0
+
++ cJSON Ultralightweight JSON parser in ANSI C
+    + Copyright: 2009-2017 Dave Gamble and cJSON contributors
+    + License: MIT
 
 + File: usr/share/games/vonsh/board_tiles.png
     + Copyright: 2018 Beast
