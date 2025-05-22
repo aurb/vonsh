@@ -145,15 +145,21 @@ MenuItem options_menu_items[] = {
     {NULL, NULL, {0,0,0,0}, 1, "Right:", &key_right},
     {NULL, NULL, {0,0,0,0}, 1, "Up:", &key_up},
     {NULL, NULL, {0,0,0,0}, 1, "Down:", &key_down},
-    {"Pause: SPACE", NULL, {0,0,0,0}, 0, NULL, NULL},  // Changed to non-configurable item
+    {"Pause: SPACE", NULL, {0,0,0,0}, 0, NULL, NULL},
     {NULL, menu_action_toggle_music, {0,0,0,0}, 0, NULL, NULL},
     {NULL, menu_action_toggle_sfx, {0,0,0,0}, 0, NULL, NULL},
     {NULL, menu_action_toggle_fullscreen, {0,0,0,0}, 0, NULL, NULL},
+    {NULL, NULL, {0,0,0,0}, 1, "Board Width:", NULL},
+    {NULL, NULL, {0,0,0,0}, 1, "Board Height:", NULL},
     {"Back", menu_action_back_to_title, {0,0,0,0}, 0, NULL, NULL}
 };
 int options_menu_item_count = sizeof(options_menu_items) / sizeof(MenuItem);
 int options_menu_selected_item = 0;
 int configuring_key_item_index = -1; // Index of the item being configured
+
+// Add variables to store windowed mode dimensions
+int windowed_board_w = BOARD_WIDTH;
+int windowed_board_h = BOARD_HEIGHT;
 
 /* Callback for animation frame timer.
    Generates SDL_USEREVENT when main game loop shall render next frame. */
@@ -733,6 +739,14 @@ void render_screen(void)
                     sprintf(item_text_buf, "Sound effects: %s", sfx_on ? "ON" : "OFF");
                 } else if (options_menu_items[i].action == menu_action_toggle_fullscreen) {
                     sprintf(item_text_buf, "Display: %s", fullscreen ? "fullscreen" : "window");
+                } else if (options_menu_items[i].config_label && (strcmp(options_menu_items[i].config_label, "Board Width:") == 0 || strcmp(options_menu_items[i].config_label, "Board Height:") == 0)) {
+                    if (fullscreen) {
+                        SET_GREY_TEXT;
+                        sprintf(item_text_buf, "%s %d", options_menu_items[i].config_label, (strcmp(options_menu_items[i].config_label, "Board Width:") == 0) ? board_w : board_h);
+                    } else {
+                        SET_WHITE_TEXT;
+                        sprintf(item_text_buf, "%s %d", options_menu_items[i].config_label, (strcmp(options_menu_items[i].config_label, "Board Width:") == 0) ? windowed_board_w : windowed_board_h);
+                    }
                 } else {
                     if (options_menu_items[i].action == NULL) {
                         SET_GREY_TEXT;
@@ -1153,5 +1167,33 @@ void menu_action_configure_key(MenuItem* item) {
     if (item && item->is_key_config) {
         game_state = KeyConfiguring;
         // The actual key configuration will be handled in the event loop for KeyConfiguring state
+    }
+}
+
+// Function to handle board width and height configuration
+void menu_action_configure_board_dimension(MenuItem* item) {
+    if (item) {
+        char input[10];
+        int new_value;
+        printf("Enter new value for %s: ", item->config_label);
+        if (fgets(input, sizeof(input), stdin) == NULL) {
+            printf("Error reading input. Retaining previous value.\n");
+            return;
+        }
+        if (sscanf(input, "%d", &new_value) == 1) {
+            if (strcmp(item->config_label, "Board Width:") == 0 && new_value >= 30) {
+                windowed_board_w = new_value;
+            } else if (strcmp(item->config_label, "Board Height:") == 0 && new_value >= 20) {
+                windowed_board_h = new_value;
+            } else {
+                printf("Invalid value. Retaining previous value.\n");
+            }
+        } else {
+            printf("Invalid input. Retaining previous value.\n");
+        }
+        // Trigger window resize if in windowed mode
+        if (!fullscreen) {
+            create_windowed_display();
+        }
     }
 }
