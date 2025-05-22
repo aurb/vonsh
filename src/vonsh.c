@@ -111,6 +111,9 @@ SDL_KeyCode key_up = SDLK_UP;
 SDL_KeyCode key_down = SDLK_DOWN;
 SDL_KeyCode key_pause = SDLK_SPACE;  // Fixed to Space key
 
+int configuring_board_size = -1; // 0=width, 1=height, -1=not configuring
+char size_input_buffer[10] = {0};
+
 typedef struct MenuItem {
     const char* text;
     void (*action)(void);
@@ -145,7 +148,9 @@ MenuItem options_menu_items[] = {
     {NULL, NULL, {0,0,0,0}, 1, "Right:", &key_right},
     {NULL, NULL, {0,0,0,0}, 1, "Up:", &key_up},
     {NULL, NULL, {0,0,0,0}, 1, "Down:", &key_down},
-    {"Pause: SPACE", NULL, {0,0,0,0}, 0, NULL, NULL},  // Changed to non-configurable item
+    {NULL, NULL, {0,0,0,0}, 2, "Width:", NULL},  // New type 2 for board size
+    {NULL, NULL, {0,0,0,0}, 2, "Height:", NULL}, // New type 2 for board size
+    {"Pause: SPACE", NULL, {0,0,0,0}, 0, NULL, NULL},
     {NULL, menu_action_toggle_music, {0,0,0,0}, 0, NULL, NULL},
     {NULL, menu_action_toggle_sfx, {0,0,0,0}, 0, NULL, NULL},
     {NULL, menu_action_toggle_fullscreen, {0,0,0,0}, 0, NULL, NULL},
@@ -733,6 +738,31 @@ void render_screen(void)
                     sprintf(item_text_buf, "Sound effects: %s", sfx_on ? "ON" : "OFF");
                 } else if (options_menu_items[i].action == menu_action_toggle_fullscreen) {
                     sprintf(item_text_buf, "Display: %s", fullscreen ? "fullscreen" : "window");
+                } else if (options_menu_items[i].is_key_config == 2) { // Board size items
+                    char size_buf[20];
+                    int current_w = fullscreen ? board_w : win_board_w;
+                    int current_h = fullscreen ? board_h : win_board_h;
+                    
+                    if (fullscreen) {
+                        SET_GREY_TEXT;
+                    } else {
+                        SET_WHITE_TEXT;
+                    }
+
+                    if (configuring_board_size == 0 && i == 4) { // Configuring width
+                        snprintf(size_buf, sizeof(size_buf), "%s: %s", 
+                                options_menu_items[i].config_label, size_input_buffer);
+                    } else if (configuring_board_size == 1 && i == 5) { // Configuring height
+                        snprintf(size_buf, sizeof(size_buf), "%s: %s", 
+                                options_menu_items[i].config_label, size_input_buffer);
+                    } else {
+                        snprintf(size_buf, sizeof(size_buf), "%s: %d", 
+                                options_menu_items[i].config_label, 
+                                (i == 4) ? current_w : current_h);
+                    }
+                    
+                    render_text(renderer, txt_font, size_buf, screen_w/2, current_y + MENU_ITEM_HEIGHT/2, 
+                               ALIGN_CENTER_HORIZONTAL, ALIGN_CENTER_VERTICAL);
                 } else {
                     if (options_menu_items[i].action == NULL) {
                         SET_GREY_TEXT;
