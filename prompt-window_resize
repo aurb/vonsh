@@ -1,0 +1,13 @@
+Add to options menu ability to configure game board width and height for windowed mode.
+
+Board width and height shall have separate entries in options list placed after key entries. After activating their corresponding menu entries, width and height values shall be typed in by user using keyboard.
+
+Minimum allowed board width shall be 30. Minimum allowed board height shall be 20. If user types in value below minimum, or value that is not a valid integer, previous value shall be retained.
+
+When in fullscreen mode, board width/height options menu entries shall be deactivated:
+    - it shall be not possible to modify them
+    - their text shall be in grey
+    - their displayed value shall reflect board width/height in fullscreen mode.
+
+After switching from fullscreen to windowed mode, previous windowed board width/height values shall be displayed in their menu entries. When in windowed mode, entering new width/height should trigger immediate resizing of window(like after switching from fullscreen to windowed mode). 
+
