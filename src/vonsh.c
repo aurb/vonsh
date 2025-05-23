@@ -30,7 +30,9 @@ typedef enum e_GameState {
     GameOver,
     TitleScreen,
     OptionsMenu,
-    KeyConfiguring
+    KeyConfiguring,
+    ConfiguringWidth,
+    ConfiguringHeight
 } GameState;
 
 typedef enum e_FieldType { /* indicates what is inside game board field */
@@ -129,6 +131,8 @@ void menu_action_toggle_music(void);
 void menu_action_toggle_sfx(void);
 void menu_action_toggle_fullscreen(void);
 void menu_action_configure_key(MenuItem* item); // Placeholder, will pass specific item
+void menu_action_configure_width(void);
+void menu_action_configure_height(void);
 
 // Title Screen Menu
 MenuItem title_menu_items[] = {
@@ -145,7 +149,9 @@ MenuItem options_menu_items[] = {
     {NULL, NULL, {0,0,0,0}, 1, "Right:", &key_right},
     {NULL, NULL, {0,0,0,0}, 1, "Up:", &key_up},
     {NULL, NULL, {0,0,0,0}, 1, "Down:", &key_down},
-    {"Pause: SPACE", NULL, {0,0,0,0}, 0, NULL, NULL},  // Changed to non-configurable item
+    {NULL, menu_action_configure_width, {0,0,0,0}, 0, NULL, NULL},
+    {NULL, menu_action_configure_height, {0,0,0,0}, 0, NULL, NULL},
+    {"Pause: SPACE", NULL, {0,0,0,0}, 0, NULL, NULL},
     {NULL, menu_action_toggle_music, {0,0,0,0}, 0, NULL, NULL},
     {NULL, menu_action_toggle_sfx, {0,0,0,0}, 0, NULL, NULL},
     {NULL, menu_action_toggle_fullscreen, {0,0,0,0}, 0, NULL, NULL},
@@ -733,6 +739,20 @@ void render_screen(void)
                     sprintf(item_text_buf, "Sound effects: %s", sfx_on ? "ON" : "OFF");
                 } else if (options_menu_items[i].action == menu_action_toggle_fullscreen) {
                     sprintf(item_text_buf, "Display: %s", fullscreen ? "fullscreen" : "window");
+                } else if (options_menu_items[i].action == menu_action_configure_width) {
+                    sprintf(item_text_buf, "Board Width: %d", fullscreen ? board_w : win_board_w);
+                    if (fullscreen) {
+                        SET_GREY_TEXT;
+                    } else {
+                        SET_WHITE_TEXT;
+                    }
+                } else if (options_menu_items[i].action == menu_action_configure_height) {
+                    sprintf(item_text_buf, "Board Height: %d", fullscreen ? board_h : win_board_h);
+                    if (fullscreen) {
+                        SET_GREY_TEXT;
+                    } else {
+                        SET_WHITE_TEXT;
+                    }
                 } else {
                     if (options_menu_items[i].action == NULL) {
                         SET_GREY_TEXT;
@@ -1055,6 +1075,42 @@ int main(int argc, char ** argv)
                             Mix_PlayMusic(idle_music, -1);
                         }
                     }
+                } else if (game_state == ConfiguringWidth) {
+                    static char width_input[10] = {0};
+                    if (event.key.keysym.sym == SDLK_RETURN) {
+                        int new_width = atoi(width_input);
+                        if (new_width >= 30) {
+                            win_board_w = new_width;
+                            create_windowed_display();
+                        }
+                        memset(width_input, 0, sizeof(width_input));
+                        game_state = OptionsMenu;
+                    } else if (event.key.keysym.sym == SDLK_BACKSPACE && strlen(width_input) > 0) {
+                        width_input[strlen(width_input)-1] = 0;
+                    } else if (isdigit(event.key.keysym.sym)) {
+                        int len = strlen(width_input);
+                        if (len < 9) {
+                            width_input[len] = event.key.keysym.sym;
+                        }
+                    }
+                } else if (game_state == ConfiguringHeight) {
+                    static char height_input[10] = {0};
+                    if (event.key.keysym.sym == SDLK_RETURN) {
+                        int new_height = atoi(height_input);
+                        if (new_height >= 20) {
+                            win_board_h = new_height;
+                            create_windowed_display();
+                        }
+                        memset(height_input, 0, sizeof(height_input));
+                        game_state = OptionsMenu;
+                    } else if (event.key.keysym.sym == SDLK_BACKSPACE && strlen(height_input) > 0) {
+                        height_input[strlen(height_input)-1] = 0;
+                    } else if (isdigit(event.key.keysym.sym)) {
+                        int len = strlen(height_input);
+                        if (len < 9) {
+                            height_input[len] = event.key.keysym.sym;
+                        }
+                    }
                 }
                 break;
             case SDL_QUIT: /* window closed */
@@ -1153,5 +1209,17 @@ void menu_action_configure_key(MenuItem* item) {
     if (item && item->is_key_config) {
         game_state = KeyConfiguring;
         // The actual key configuration will be handled in the event loop for KeyConfiguring state
+    }
+}
+
+void menu_action_configure_width(void) {
+    if (!fullscreen) {
+        game_state = ConfiguringWidth;
+    }
+}
+
+void menu_action_configure_height(void) {
+    if (!fullscreen) {
+        game_state = ConfiguringHeight;
     }
 }
