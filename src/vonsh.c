@@ -8,6 +8,10 @@
 #include "text_renderer.h"
 #include "pcg_basic.h"
 
+// Function prototypes
+void menu_action_configure_board_width(void);
+void menu_action_configure_board_height(void);
+
 #define WINDOW_TITLE "Vonsh" /* window title string */
 #define BOARD_WIDTH (56)
 #define BOARD_HEIGHT (41)
@@ -149,6 +153,8 @@ MenuItem options_menu_items[] = {
     {NULL, menu_action_toggle_music, {0,0,0,0}, 0, NULL, NULL},
     {NULL, menu_action_toggle_sfx, {0,0,0,0}, 0, NULL, NULL},
     {NULL, menu_action_toggle_fullscreen, {0,0,0,0}, 0, NULL, NULL},
+    {"Board Width: ", NULL, {0,0,0,0}, 0, NULL, NULL}, // New entry for board width
+    {"Board Height: ", NULL, {0,0,0,0}, 0, NULL, NULL}, // New entry for board height
     {"Back", menu_action_back_to_title, {0,0,0,0}, 0, NULL, NULL}
 };
 int options_menu_item_count = sizeof(options_menu_items) / sizeof(MenuItem);
@@ -733,6 +739,16 @@ void render_screen(void)
                     sprintf(item_text_buf, "Sound effects: %s", sfx_on ? "ON" : "OFF");
                 } else if (options_menu_items[i].action == menu_action_toggle_fullscreen) {
                     sprintf(item_text_buf, "Display: %s", fullscreen ? "fullscreen" : "window");
+                } else if (i == options_menu_item_count - 2) { // Board Width
+                    sprintf(item_text_buf, "Board Width: %d", win_board_w);
+                    if (fullscreen) {
+                        SET_GREY_TEXT; // Set text to grey if in fullscreen
+                    }
+                } else if (i == options_menu_item_count - 1) { // Board Height
+                    sprintf(item_text_buf, "Board Height: %d", win_board_h);
+                    if (fullscreen) {
+                        SET_GREY_TEXT; // Set text to grey if in fullscreen
+                    }
                 } else {
                     if (options_menu_items[i].action == NULL) {
                         SET_GREY_TEXT;
@@ -1024,7 +1040,11 @@ int main(int argc, char ** argv)
                     case SDLK_RETURN:
                     case SDLK_KP_ENTER:
                     case SDLK_SPACE:
-                        if (options_menu_items[options_menu_selected_item].is_key_config) {
+                        if (options_menu_selected_item == options_menu_item_count - 2) { // Board Width
+                            menu_action_configure_board_width();
+                        } else if (options_menu_selected_item == options_menu_item_count - 1) { // Board Height
+                            menu_action_configure_board_height();
+                        } else if (options_menu_items[options_menu_selected_item].is_key_config) {
                             configuring_key_item_index = options_menu_selected_item;
                             menu_action_configure_key(&options_menu_items[options_menu_selected_item]);
                         } else if (options_menu_items[options_menu_selected_item].action) {
@@ -1153,5 +1173,29 @@ void menu_action_configure_key(MenuItem* item) {
     if (item && item->is_key_config) {
         game_state = KeyConfiguring;
         // The actual key configuration will be handled in the event loop for KeyConfiguring state
+    }
+}
+
+void menu_action_configure_board_width(void) {
+    // Prompt user for new board width
+    int new_width;
+    printf("Enter new board width (min 30): ");
+    if (scanf("%d", &new_width) == 1 && new_width >= 30) {
+        win_board_w = new_width; // Update the width
+        create_windowed_display(); // Resize the window
+    } else {
+        printf("Invalid input. Width remains %d.\n", win_board_w);
+    }
+}
+
+void menu_action_configure_board_height(void) {
+    // Prompt user for new board height
+    int new_height;
+    printf("Enter new board height (min 20): ");
+    if (scanf("%d", &new_height) == 1 && new_height >= 20) {
+        win_board_h = new_height; // Update the height
+        create_windowed_display(); // Resize the window
+    } else {
+        printf("Invalid input. Height remains %d.\n", win_board_h);
     }
 }
