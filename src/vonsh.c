@@ -5,12 +5,15 @@
 #include <libgen.h>
 #include <time.h>
 #include <errno.h>
+#include <stdlib.h>
 #include "text_renderer.h"
 #include "pcg_basic.h"
 
 #define WINDOW_TITLE "Vonsh" /* window title string */
 #define BOARD_WIDTH (56)
 #define BOARD_HEIGHT (41)
+#define MIN_BOARD_WIDTH 30
+#define MIN_BOARD_HEIGHT 20
 #define RES_DIR "../share/games/vonsh/" /* resources directory */
 #define TILE_SIZE (16)
 #define MENU_WIDTH (20*16)
@@ -30,7 +33,9 @@ typedef enum e_GameState {
     GameOver,
     TitleScreen,
     OptionsMenu,
-    KeyConfiguring
+    KeyConfiguring,
+    WidthConfiguring,
+    HeightConfiguring
 } GameState;
 
 typedef enum e_FieldType { /* indicates what is inside game board field */
@@ -129,6 +134,8 @@ void menu_action_toggle_music(void);
 void menu_action_toggle_sfx(void);
 void menu_action_toggle_fullscreen(void);
 void menu_action_configure_key(MenuItem* item); // Placeholder, will pass specific item
+void menu_action_configure_width(void);
+void menu_action_configure_height(void);
 
 // Title Screen Menu
 MenuItem title_menu_items[] = {
@@ -145,6 +152,8 @@ MenuItem options_menu_items[] = {
     {NULL, NULL, {0,0,0,0}, 1, "Right:", &key_right},
     {NULL, NULL, {0,0,0,0}, 1, "Up:", &key_up},
     {NULL, NULL, {0,0,0,0}, 1, "Down:", &key_down},
+    {NULL, menu_action_configure_width, {0,0,0,0}, 0, NULL, NULL},
+    {NULL, menu_action_configure_height, {0,0,0,0}, 0, NULL, NULL},
     {"Pause: SPACE", NULL, {0,0,0,0}, 0, NULL, NULL},  // Changed to non-configurable item
     {NULL, menu_action_toggle_music, {0,0,0,0}, 0, NULL, NULL},
     {NULL, menu_action_toggle_sfx, {0,0,0,0}, 0, NULL, NULL},
@@ -154,6 +163,9 @@ MenuItem options_menu_items[] = {
 int options_menu_item_count = sizeof(options_menu_items) / sizeof(MenuItem);
 int options_menu_selected_item = 0;
 int configuring_key_item_index = -1; // Index of the item being configured
+
+char number_input_buf[16] = {0};
+int number_input_len = 0;
 
 /* Callback for animation frame timer.
    Generates SDL_USEREVENT when main game loop shall render next frame. */
@@ -731,6 +743,20 @@ void render_screen(void)
                     sprintf(item_text_buf, "Music: %s", music_on ? "ON" : "OFF");
                 } else if (options_menu_items[i].action == menu_action_toggle_sfx) {
                     sprintf(item_text_buf, "Sound effects: %s", sfx_on ? "ON" : "OFF");
+                } else if (options_menu_items[i].action == menu_action_configure_width) {
+                    if (game_state == WidthConfiguring) {
+                        sprintf(item_text_buf, "Width: ...");
+                    } else {
+                        sprintf(item_text_buf, "Width: %d", fullscreen ? board_w : win_board_w);
+                    }
+                    if (fullscreen) { SET_GREY_TEXT; }
+                } else if (options_menu_items[i].action == menu_action_configure_height) {
+                    if (game_state == HeightConfiguring) {
+                        sprintf(item_text_buf, "Height: ...");
+                    } else {
+                        sprintf(item_text_buf, "Height: %d", fullscreen ? board_h : win_board_h);
+                    }
+                    if (fullscreen) { SET_GREY_TEXT; }
                 } else if (options_menu_items[i].action == menu_action_toggle_fullscreen) {
                     sprintf(item_text_buf, "Display: %s", fullscreen ? "fullscreen" : "window");
                 } else {
@@ -953,7 +979,10 @@ int main(int argc, char ** argv)
                                     configuring_key_item_index = i;
                                     menu_action_configure_key(&options_menu_items[i]);
                                 } else if (options_menu_items[i].action) {
-                                    options_menu_items[i].action();
+                                    // Disable width/height config when fullscreen
+                                    if (!(fullscreen && (options_menu_items[i].action == menu_action_configure_width || options_menu_items[i].action == menu_action_configure_height))) {
+                                        options_menu_items[i].action();
+                                    }
                                 }
                                 break;
                             }
@@ -964,13 +993,54 @@ int main(int argc, char ** argv)
             case SDL_KEYDOWN:
                 ck_press = 0; // Reset control key press indicator for game state
                 if (event.key.keysym.sym == SDLK_ESCAPE) {
-                    if (game_state == KeyConfiguring) {
+                    if (game_state == KeyConfiguring || game_state == WidthConfiguring || game_state == HeightConfiguring) {
                         game_state = OptionsMenu;
                         configuring_key_item_index = -1;
+                        number_input_len = 0;
+                        number_input_buf[0] = '\0';
                     } else if (game_state == OptionsMenu) {
                         menu_action_back_to_title();
                     } else {
                         menu_action_exit();
+                    }
+                    break;
+                }
+                // Handle numeric input for width/height configuration
+                if (game_state == WidthConfiguring || game_state == HeightConfiguring) {
+                    SDL_KeyCode sym = event.key.keysym.sym;
+                    if (sym == SDLK_BACKSPACE) {
+                        if (number_input_len > 0) {
+                            number_input_len--;
+                            number_input_buf[number_input_len] = '\0';
+                        }
+                    } else if ((sym >= SDLK_0 && sym <= SDLK_9) || (sym >= SDLK_KP_0 && sym <= SDLK_KP_9)) {
+                        if (number_input_len < (int)(sizeof(number_input_buf) - 1)) {
+                            char c = (char)((sym >= SDLK_KP_0 && sym <= SDLK_KP_9) ? ('0' + sym - SDLK_KP_0) : ('0' + sym - SDLK_0));
+                            number_input_buf[number_input_len++] = c;
+                            number_input_buf[number_input_len] = '\0';
+                        }
+                    } else if (sym == SDLK_RETURN || sym == SDLK_KP_ENTER) {
+                        int val = atoi(number_input_buf);
+                        if (game_state == WidthConfiguring) {
+                            if (val >= MIN_BOARD_WIDTH) win_board_w = val;
+                        } else {
+                            if (val >= MIN_BOARD_HEIGHT) win_board_h = val;
+                        }
+                        // Resize window if in windowed mode
+                        if (!fullscreen) {
+                            if (create_windowed_display() == 0) {
+                                if (txt_game_board) SDL_DestroyTexture(txt_game_board);
+                                txt_game_board = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+                                                    SDL_TEXTUREACCESS_TARGET, screen_w, screen_h);
+                                if (game_board) free(game_board);
+                                game_board = calloc(board_w * board_h, sizeof(BoardField));
+                                init_game_board();
+                            }
+                        }
+                        // Return to options menu
+                        game_state = OptionsMenu;
+                        number_input_len = 0;
+                        number_input_buf[0] = '\0';
                     }
                     break;
                 }
@@ -1028,7 +1098,10 @@ int main(int argc, char ** argv)
                             configuring_key_item_index = options_menu_selected_item;
                             menu_action_configure_key(&options_menu_items[options_menu_selected_item]);
                         } else if (options_menu_items[options_menu_selected_item].action) {
-                            options_menu_items[options_menu_selected_item].action();
+                            // Disable width/height config when fullscreen
+                            if (!(fullscreen && (options_menu_items[options_menu_selected_item].action == menu_action_configure_width || options_menu_items[options_menu_selected_item].action == menu_action_configure_height))) {
+                                options_menu_items[options_menu_selected_item].action();
+                            }
                         }
                         break;
                     default:
@@ -1154,4 +1227,16 @@ void menu_action_configure_key(MenuItem* item) {
         game_state = KeyConfiguring;
         // The actual key configuration will be handled in the event loop for KeyConfiguring state
     }
+}
+
+void menu_action_configure_width(void) {
+    game_state = WidthConfiguring;
+    number_input_len = 0;
+    number_input_buf[0] = '\0';
+}
+
+void menu_action_configure_height(void) {
+    game_state = HeightConfiguring;
+    number_input_len = 0;
+    number_input_buf[0] = '\0';
 }
