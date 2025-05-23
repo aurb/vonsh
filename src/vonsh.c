@@ -30,7 +30,8 @@ typedef enum e_GameState {
     GameOver,
     TitleScreen,
     OptionsMenu,
-    KeyConfiguring
+    KeyConfiguring,
+    ConfiguringDimension
 } GameState;
 
 typedef enum e_FieldType { /* indicates what is inside game board field */
@@ -118,6 +119,8 @@ typedef struct MenuItem {
     int is_key_config; // Flag to indicate if this is a key configuration item
     const char* config_label; // e.g., "Left:"
     SDL_KeyCode* key_to_configure; // Pointer to the actual key variable
+    int is_dimension_config; // Flag to indicate if this is a dimension configuration item
+    int* dimension_to_configure; // Pointer to the actual dimension variable (width/height)
 } MenuItem;
 
 // Menu actions
@@ -141,19 +144,23 @@ int title_menu_selected_item = 0;
 
 // Options Screen Menu
 MenuItem options_menu_items[] = {
-    {NULL, NULL, {0,0,0,0}, 1, "Left:", &key_left},
-    {NULL, NULL, {0,0,0,0}, 1, "Right:", &key_right},
-    {NULL, NULL, {0,0,0,0}, 1, "Up:", &key_up},
-    {NULL, NULL, {0,0,0,0}, 1, "Down:", &key_down},
-    {"Pause: SPACE", NULL, {0,0,0,0}, 0, NULL, NULL},  // Changed to non-configurable item
-    {NULL, menu_action_toggle_music, {0,0,0,0}, 0, NULL, NULL},
-    {NULL, menu_action_toggle_sfx, {0,0,0,0}, 0, NULL, NULL},
-    {NULL, menu_action_toggle_fullscreen, {0,0,0,0}, 0, NULL, NULL},
-    {"Back", menu_action_back_to_title, {0,0,0,0}, 0, NULL, NULL}
+    {NULL, NULL, {0,0,0,0}, 1, "Left:", &key_left, 0, NULL},
+    {NULL, NULL, {0,0,0,0}, 1, "Right:", &key_right, 0, NULL},
+    {NULL, NULL, {0,0,0,0}, 1, "Up:", &key_up, 0, NULL},
+    {NULL, NULL, {0,0,0,0}, 1, "Down:", &key_down, 0, NULL},
+    {"Pause: SPACE", NULL, {0,0,0,0}, 0, NULL, NULL, 0, NULL},  // Changed to non-configurable item
+    {NULL, menu_action_toggle_music, {0,0,0,0}, 0, NULL, NULL, 0, NULL},
+    {NULL, menu_action_toggle_sfx, {0,0,0,0}, 0, NULL, NULL, 0, NULL},
+    {NULL, menu_action_toggle_fullscreen, {0,0,0,0}, 0, NULL, NULL, 0, NULL},
+    {NULL, NULL, {0,0,0,0}, 0, "Board Width:", NULL, 1, &win_board_w},
+    {NULL, NULL, {0,0,0,0}, 0, "Board Height:", NULL, 1, &win_board_h},
+    {"Back", menu_action_back_to_title, {0,0,0,0}, 0, NULL, NULL, 0, NULL}
 };
 int options_menu_item_count = sizeof(options_menu_items) / sizeof(MenuItem);
 int options_menu_selected_item = 0;
 int configuring_key_item_index = -1; // Index of the item being configured
+int configuring_dimension_item_index = -1; // Index of the dimension item being configured
+char dimension_input_buffer[10]; // Buffer for dimension input
 
 /* Callback for animation frame timer.
    Generates SDL_USEREVENT when main game loop shall render next frame. */
@@ -733,6 +740,21 @@ void render_screen(void)
                     sprintf(item_text_buf, "Sound effects: %s", sfx_on ? "ON" : "OFF");
                 } else if (options_menu_items[i].action == menu_action_toggle_fullscreen) {
                     sprintf(item_text_buf, "Display: %s", fullscreen ? "fullscreen" : "window");
+                } else if (options_menu_items[i].is_dimension_config) {
+                    if (fullscreen) {
+                        SET_GREY_TEXT;
+                         if (options_menu_items[i].dimension_to_configure == &win_board_w) {
+                            sprintf(item_text_buf, "%s %d", options_menu_items[i].config_label, board_w);
+                        } else { // Must be &win_board_h
+                            sprintf(item_text_buf, "%s %d", options_menu_items[i].config_label, board_h);
+                        }
+                    } else {
+                        if (game_state == ConfiguringDimension && configuring_dimension_item_index == i) {
+                            sprintf(item_text_buf, "%s %s", options_menu_items[i].config_label, dimension_input_buffer);
+                        } else {
+                            sprintf(item_text_buf, "%s %d", options_menu_items[i].config_label, *(options_menu_items[i].dimension_to_configure));
+                        }
+                    }
                 } else {
                     if (options_menu_items[i].action == NULL) {
                         SET_GREY_TEXT;
@@ -954,6 +976,10 @@ int main(int argc, char ** argv)
                                     menu_action_configure_key(&options_menu_items[i]);
                                 } else if (options_menu_items[i].action) {
                                     options_menu_items[i].action();
+                                } else if (options_menu_items[i].is_dimension_config && !fullscreen) {
+                                     configuring_dimension_item_index = i;
+                                     sprintf(dimension_input_buffer, "%d", *(options_menu_items[i].dimension_to_configure));
+                                     game_state = ConfiguringDimension;
                                 }
                                 break;
                             }
@@ -1029,6 +1055,10 @@ int main(int argc, char ** argv)
                             menu_action_configure_key(&options_menu_items[options_menu_selected_item]);
                         } else if (options_menu_items[options_menu_selected_item].action) {
                             options_menu_items[options_menu_selected_item].action();
+                        } else if (options_menu_items[options_menu_selected_item].is_dimension_config && !fullscreen) {
+                             configuring_dimension_item_index = options_menu_selected_item;
+                             sprintf(dimension_input_buffer, "%d", *(options_menu_items[options_menu_selected_item].dimension_to_configure));
+                             game_state = ConfiguringDimension;
                         }
                         break;
                     default:
@@ -1054,6 +1084,57 @@ int main(int argc, char ** argv)
                         if (music_on && Mix_PlayingMusic() == 0) { // Resume idle music if it stopped
                             Mix_PlayMusic(idle_music, -1);
                         }
+                    }
+                } else if (game_state == ConfiguringDimension) {
+                     if (event.key.keysym.sym >= SDLK_0 && event.key.keysym.sym <= SDLK_9) {
+                        if (strlen(dimension_input_buffer) < sizeof(dimension_input_buffer) - 1) {
+                            char digit = (char)event.key.keysym.sym;
+                            size_t current_len = strlen(dimension_input_buffer);
+                            dimension_input_buffer[current_len] = digit;
+                            dimension_input_buffer[current_len + 1] = '\0';
+                        }
+                    } else if (event.key.keysym.sym == SDLK_BACKSPACE) {
+                        if (strlen(dimension_input_buffer) > 0) {
+                            dimension_input_buffer[strlen(dimension_input_buffer) - 1] = '\0';
+                        }
+                    } else if (event.key.keysym.sym == SDLK_RETURN || event.key.keysym.sym == SDLK_KP_ENTER) {
+                        int new_value = atoi(dimension_input_buffer);
+                        int min_value = (options_menu_items[configuring_dimension_item_index].dimension_to_configure == &win_board_w) ? 30 : 20;
+                        if (new_value >= min_value) {
+                            *(options_menu_items[configuring_dimension_item_index].dimension_to_configure) = new_value;
+                            // Trigger window resize immediately in windowed mode
+                            if (!fullscreen) {
+                                SDL_DestroyRenderer(renderer);
+                                SDL_DestroyWindow(screen);
+                                if (create_windowed_display()) return 1; // Recreate window
+                                renderer = SDL_CreateRenderer(screen, -1,
+                                            SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE);
+                                if (!renderer) return 1;
+
+                                // Destroy and recreate the game board texture
+                                if (txt_game_board) {
+                                    SDL_DestroyTexture(txt_game_board);
+                                }
+                                txt_game_board = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+                                                SDL_TEXTUREACCESS_TARGET, screen_w, screen_h);
+                                if (!txt_game_board) return 1;
+
+                                // Reallocate game board array if needed
+                                if (game_board) {
+                                    free(game_board);
+                                }
+                                game_board = calloc(board_w * board_h, sizeof(BoardField));
+                                if (!game_board) return 1;
+
+                                // Reinitialize the game board background
+                                init_game_board();
+                            }
+                        }
+                        game_state = OptionsMenu;
+                        configuring_dimension_item_index = -1;
+                    } else if (event.key.keysym.sym == SDLK_ESCAPE) {
+                        game_state = OptionsMenu;
+                        configuring_dimension_item_index = -1;
                     }
                 }
                 break;
