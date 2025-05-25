@@ -30,7 +30,9 @@ typedef enum e_GameState {
     GameOver,
     TitleScreen,
     OptionsMenu,
-    KeyConfiguring
+    KeyConfiguring,
+    ConfiguringBoardWidth,
+    ConfiguringBoardHeight
 } GameState;
 
 typedef enum e_FieldType { /* indicates what is inside game board field */
@@ -129,6 +131,8 @@ void menu_action_toggle_music(void);
 void menu_action_toggle_sfx(void);
 void menu_action_toggle_fullscreen(void);
 void menu_action_configure_key(MenuItem* item); // Placeholder, will pass specific item
+void menu_action_configure_board_width(void);
+void menu_action_configure_board_height(void);
 
 // Title Screen Menu
 MenuItem title_menu_items[] = {
@@ -145,10 +149,12 @@ MenuItem options_menu_items[] = {
     {NULL, NULL, {0,0,0,0}, 1, "Right:", &key_right},
     {NULL, NULL, {0,0,0,0}, 1, "Up:", &key_up},
     {NULL, NULL, {0,0,0,0}, 1, "Down:", &key_down},
-    {"Pause: SPACE", NULL, {0,0,0,0}, 0, NULL, NULL},  // Changed to non-configurable item
+    {"Pause: SPACE", NULL, {0,0,0,0}, 0, NULL, NULL},
     {NULL, menu_action_toggle_music, {0,0,0,0}, 0, NULL, NULL},
     {NULL, menu_action_toggle_sfx, {0,0,0,0}, 0, NULL, NULL},
     {NULL, menu_action_toggle_fullscreen, {0,0,0,0}, 0, NULL, NULL},
+    {NULL, menu_action_configure_board_width, {0,0,0,0}, 0, "Board Width:", NULL},
+    {NULL, menu_action_configure_board_height, {0,0,0,0}, 0, "Board Height:", NULL},
     {"Back", menu_action_back_to_title, {0,0,0,0}, 0, NULL, NULL}
 };
 int options_menu_item_count = sizeof(options_menu_items) / sizeof(MenuItem);
@@ -718,26 +724,37 @@ void render_screen(void)
             SET_WHITE_TEXT;
             for (int i = 0; i < options_menu_item_count; i++) {
                 char item_text_buf[100];
-                SET_WHITE_TEXT;
-                if (options_menu_items[i].is_key_config) {
-                    const char* key_name = SDL_GetKeyName(*(options_menu_items[i].key_to_configure));
-                    if (game_state == KeyConfiguring && configuring_key_item_index == i) {
-                         sprintf(item_text_buf, "%s ...", options_menu_items[i].config_label);
-                    }
-                     else {
-                         sprintf(item_text_buf, "%s %s", options_menu_items[i].config_label, key_name);
-                    }
-                } else if (options_menu_items[i].action == menu_action_toggle_music) {
-                    sprintf(item_text_buf, "Music: %s", music_on ? "ON" : "OFF");
-                } else if (options_menu_items[i].action == menu_action_toggle_sfx) {
-                    sprintf(item_text_buf, "Sound effects: %s", sfx_on ? "ON" : "OFF");
-                } else if (options_menu_items[i].action == menu_action_toggle_fullscreen) {
-                    sprintf(item_text_buf, "Display: %s", fullscreen ? "fullscreen" : "window");
+                if (fullscreen && (i == 8 || i == 9)) { // Disable board width/height in fullscreen
+                    SET_GREY_TEXT;
+                    sprintf(item_text_buf, "%s %d", options_menu_items[i].config_label, (i == 8) ? board_w : board_h);
                 } else {
-                    if (options_menu_items[i].action == NULL) {
-                        SET_GREY_TEXT;
+                    SET_WHITE_TEXT;
+                    if (i == 8) {
+                        sprintf(item_text_buf, "%s %d", options_menu_items[i].config_label, win_board_w);
+                    } else if (i == 9) {
+                        sprintf(item_text_buf, "%s %d", options_menu_items[i].config_label, win_board_h);
+                    } else {
+                        if (options_menu_items[i].is_key_config) {
+                            const char* key_name = SDL_GetKeyName(*(options_menu_items[i].key_to_configure));
+                            if (game_state == KeyConfiguring && configuring_key_item_index == i) {
+                                 sprintf(item_text_buf, "%s ...", options_menu_items[i].config_label);
+                            }
+                             else {
+                                 sprintf(item_text_buf, "%s %s", options_menu_items[i].config_label, key_name);
+                            }
+                        } else if (options_menu_items[i].action == menu_action_toggle_music) {
+                            sprintf(item_text_buf, "Music: %s", music_on ? "ON" : "OFF");
+                        } else if (options_menu_items[i].action == menu_action_toggle_sfx) {
+                            sprintf(item_text_buf, "Sound effects: %s", sfx_on ? "ON" : "OFF");
+                        } else if (options_menu_items[i].action == menu_action_toggle_fullscreen) {
+                            sprintf(item_text_buf, "Display: %s", fullscreen ? "fullscreen" : "window");
+                        } else {
+                            if (options_menu_items[i].action == NULL) {
+                                SET_GREY_TEXT;
+                            }
+                            sprintf(item_text_buf, "%s", options_menu_items[i].text);
+                        }
                     }
-                    sprintf(item_text_buf, "%s", options_menu_items[i].text);
                 }
 
                 options_menu_items[i].rect.w = MENU_ITEM_WIDTH;
@@ -1153,5 +1170,17 @@ void menu_action_configure_key(MenuItem* item) {
     if (item && item->is_key_config) {
         game_state = KeyConfiguring;
         // The actual key configuration will be handled in the event loop for KeyConfiguring state
+    }
+}
+
+void menu_action_configure_board_width(void) {
+    if (!fullscreen) {
+        game_state = ConfiguringBoardWidth;
+    }
+}
+
+void menu_action_configure_board_height(void) {
+    if (!fullscreen) {
+        game_state = ConfiguringBoardHeight;
     }
 }
