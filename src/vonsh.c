@@ -22,6 +22,10 @@
 #define GAME_OVER_WIDTH (16*16)
 #define GAME_OVER_BORDER (16)
 #define GAME_OVER_ITEM_SPACE (12)
+#define MIN_BOARD_WIDTH 30
+#define MIN_BOARD_HEIGHT 20
+#define BOARD_SIZE_INPUT_MAXLEN 4
+
 typedef enum e_GameState {
     NotInitialized,
     NotStarted,
@@ -48,6 +52,20 @@ typedef struct BoardField {
     int pdx; /* delta x to previous piece of snake. */
     int pdy; /* delta y to previous piece of snake. */
 } BoardField;
+
+typedef enum {
+    BoardSizeNone = 0,
+    BoardSizeWidth,
+    BoardSizeHeight
+} BoardSizeConfigState;
+
+static BoardSizeConfigState configuring_board_size = BoardSizeNone;
+static char board_size_input_buf[BOARD_SIZE_INPUT_MAXLEN+1] = "";
+static int board_size_input_len = 0;
+
+// Store previous windowed values for restoration
+static int prev_win_board_w = BOARD_WIDTH;
+static int prev_win_board_h = BOARD_HEIGHT;
 
 #define RENDER_INTERVAL 50   // Interval between frames in milliseconds
 #define GROUND_TILES 8  // Number of ground tiles in the tileset
@@ -129,6 +147,8 @@ void menu_action_toggle_music(void);
 void menu_action_toggle_sfx(void);
 void menu_action_toggle_fullscreen(void);
 void menu_action_configure_key(MenuItem* item); // Placeholder, will pass specific item
+void menu_action_configure_board_width(void);
+void menu_action_configure_board_height(void);
 
 // Title Screen Menu
 MenuItem title_menu_items[] = {
@@ -145,7 +165,9 @@ MenuItem options_menu_items[] = {
     {NULL, NULL, {0,0,0,0}, 1, "Right:", &key_right},
     {NULL, NULL, {0,0,0,0}, 1, "Up:", &key_up},
     {NULL, NULL, {0,0,0,0}, 1, "Down:", &key_down},
-    {"Pause: SPACE", NULL, {0,0,0,0}, 0, NULL, NULL},  // Changed to non-configurable item
+    {NULL, menu_action_configure_board_width, {0,0,0,0}, 0, "Board width:", NULL},
+    {NULL, menu_action_configure_board_height, {0,0,0,0}, 0, "Board height:", NULL},
+    {"Pause: SPACE", NULL, {0,0,0,0}, 0, NULL, NULL},
     {NULL, menu_action_toggle_music, {0,0,0,0}, 0, NULL, NULL},
     {NULL, menu_action_toggle_sfx, {0,0,0,0}, 0, NULL, NULL},
     {NULL, menu_action_toggle_fullscreen, {0,0,0,0}, 0, NULL, NULL},
@@ -719,13 +741,25 @@ void render_screen(void)
             for (int i = 0; i < options_menu_item_count; i++) {
                 char item_text_buf[100];
                 SET_WHITE_TEXT;
+                int is_board_width = (i == 4);
+                int is_board_height = (i == 5);
                 if (options_menu_items[i].is_key_config) {
                     const char* key_name = SDL_GetKeyName(*(options_menu_items[i].key_to_configure));
                     if (game_state == KeyConfiguring && configuring_key_item_index == i) {
-                         sprintf(item_text_buf, "%s ...", options_menu_items[i].config_label);
+                        sprintf(item_text_buf, "%s ...", options_menu_items[i].config_label);
+                    } else {
+                        sprintf(item_text_buf, "%s %s", options_menu_items[i].config_label, key_name);
                     }
-                     else {
-                         sprintf(item_text_buf, "%s %s", options_menu_items[i].config_label, key_name);
+                } else if (is_board_width || is_board_height) {
+                    int value = is_board_width ? (fullscreen ? board_w : win_board_w) : (fullscreen ? board_h : win_board_h);
+                    int editing = (configuring_board_size == (is_board_width ? BoardSizeWidth : BoardSizeHeight));
+                    if (fullscreen) {
+                        SET_GREY_TEXT;
+                    }
+                    if (editing) {
+                        sprintf(item_text_buf, "%s %s_", options_menu_items[i].config_label, board_size_input_buf);
+                    } else {
+                        sprintf(item_text_buf, "%s %d", options_menu_items[i].config_label, value);
                     }
                 } else if (options_menu_items[i].action == menu_action_toggle_music) {
                     sprintf(item_text_buf, "Music: %s", music_on ? "ON" : "OFF");
@@ -949,7 +983,13 @@ int main(int argc, char ** argv)
                             if (mouse_x >= options_menu_items[i].rect.x && mouse_x <= options_menu_items[i].rect.x + options_menu_items[i].rect.w &&
                                 mouse_y >= options_menu_items[i].rect.y && mouse_y <= options_menu_items[i].rect.y + options_menu_items[i].rect.h) {
                                 options_menu_selected_item = i; // Visually select
-                                if (options_menu_items[i].is_key_config) {
+                                if (i == 4 || i == 5) { // Board width/height
+                                    if (!fullscreen) {
+                                        configuring_board_size = (i == 4) ? BoardSizeWidth : BoardSizeHeight;
+                                        board_size_input_buf[0] = '\0';
+                                        board_size_input_len = 0;
+                                    }
+                                } else if (options_menu_items[i].is_key_config) {
                                     configuring_key_item_index = i;
                                     menu_action_configure_key(&options_menu_items[i]);
                                 } else if (options_menu_items[i].action) {
@@ -1024,7 +1064,13 @@ int main(int argc, char ** argv)
                     case SDLK_RETURN:
                     case SDLK_KP_ENTER:
                     case SDLK_SPACE:
-                        if (options_menu_items[options_menu_selected_item].is_key_config) {
+                        if (options_menu_selected_item == 4 || options_menu_selected_item == 5) {
+                            if (!fullscreen) {
+                                configuring_board_size = (options_menu_selected_item == 4) ? BoardSizeWidth : BoardSizeHeight;
+                                board_size_input_buf[0] = '\0';
+                                board_size_input_len = 0;
+                            }
+                        } else if (options_menu_items[options_menu_selected_item].is_key_config) {
                             configuring_key_item_index = options_menu_selected_item;
                             menu_action_configure_key(&options_menu_items[options_menu_selected_item]);
                         } else if (options_menu_items[options_menu_selected_item].action) {
@@ -1106,20 +1152,21 @@ void menu_action_toggle_sfx(void) {
 
 void menu_action_toggle_fullscreen(void) {
     fullscreen = !fullscreen;
-    
+    if (!fullscreen) {
+        // Restore previous windowed values
+        win_board_w = prev_win_board_w;
+        win_board_h = prev_win_board_h;
+    } else {
+        // Save current windowed values
+        prev_win_board_w = win_board_w;
+        prev_win_board_h = win_board_h;
+    }
     // Store current game state
     GameState prev_state = game_state;
-    
-    // Temporarily set to NotStarted to allow proper reinitialization
     game_state = NotStarted;
-    
-    // Create display area based on new mode
     if (fullscreen) {
         if (create_fullscreen_display()) return;
-    } 
-    else if (create_windowed_display()) return;
-    
-    // Destroy and recreate the game board texture
+    } else if (create_windowed_display()) return;
     if (txt_game_board) {
         SDL_DestroyTexture(txt_game_board);
     }
@@ -1130,8 +1177,6 @@ void menu_action_toggle_fullscreen(void) {
             "Error creating background texture", SDL_GetError(), NULL);
         return;
     }
-    
-    // Reallocate game board array if needed
     if (game_board) {
         free(game_board);
     }
@@ -1141,11 +1186,7 @@ void menu_action_toggle_fullscreen(void) {
             "Error", "Error allocating memory", NULL);
         return;
     }
-    
-    // Reinitialize the game board
     init_game_board();
-    
-    // Restore previous game state
     game_state = prev_state;
 }
 
@@ -1155,3 +1196,6 @@ void menu_action_configure_key(MenuItem* item) {
         // The actual key configuration will be handled in the event loop for KeyConfiguring state
     }
 }
+
+void menu_action_configure_board_width(void) { /* handled in event loop */ }
+void menu_action_configure_board_height(void) { /* handled in event loop */ }
